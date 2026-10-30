@@ -1,31 +1,39 @@
-import { useEffect, useState } from "react";
-import { db } from "../firebaseConfig";
+import { useState, useEffect } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../firebaseConfig";
+
+interface DashboardData {
+  agendamentosHoje: number;
+  faturamentoDiario: number;
+  taxaOcupacao: number;
+  feedbackMedio: number;
+}
 
 export function useDashboardData() {
+  const [dados, setDados] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dados, setDados] = useState(null);
 
   useEffect(() => {
-    async function carregarDados() {
+    async function fetchData() {
       setLoading(true);
+      // ... suas consultas para montar os dados aqui
 
-      const hoje = new Date().toISOString().slice(0, 10);
-      const agendamentosRef = collection(db, "agendamentos");
-      const q = query(agendamentosRef, where("data", "==", hoje));
-      const snapshot = await getDocs(q);
-      const agendamentosHoje = snapshot.size;
+      const agendamentosHoje = 10; // exemplo
+      const faturamentoDiario = 2000;
+      const taxaOcupacao = 90;
+      const feedbackMedio = 4.5;
 
-      // Stub para os outros valores, substitua pelas consultas reais depois
-      const faturamentoDiario = 1250;
-      const taxaOcupacao = 85;
-      const feedbackMedio = 4.8;
+      setDados({
+        agendamentosHoje,
+        faturamentoDiario,
+        taxaOcupacao,
+        feedbackMedio,
+      });
 
-      setDados({ agendamentosHoje, faturamentoDiario, taxaOcupacao, feedbackMedio });
       setLoading(false);
     }
 
-    carregarDados();
+    fetchData();
   }, []);
 
   return { dados, loading };
