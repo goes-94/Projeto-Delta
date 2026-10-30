@@ -1,69 +1,116 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../firebaseConfig";
+
+interface DashboardData {
+  agendamentosHoje: number;
+  faturamentoDiario: number;
+  taxaOcupacao: number;
+  feedbackMedio: number;
+}
+
+export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [dados, setDados] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchDashboardData() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const hoje = new Date().toISOString().slice(0, 10); // formato yyyy-mm-dd
+
+        // 1. Agendamentos Hoje
+        const agendamentosRef = collection(db, "agendamentos");
+        const qAgendamentos = query(agendamentosRef, where("data", "==", hoje));
+        const snapshotAgendamentos = await getDocs(qAgendamentos);
+        const agendamentosHoje = snapshotAgendamentos.size;
+
+        // 2. Faturamento Diário (supondo coleção pagamentos com campo 'data' e 'valor')
+        const pagamentosRef = collection(db, "pagamentos");
+        const qPagamentos = query(pagamentosRef, where("data", "==", hoje));
+        const snapshotPagamentos = await getDocs(qPagamentos);
+        let faturamentoDiario = 0;
+        snapshotPagamentos.forEach(doc => {
+          const data = doc.data();
+          faturamentoDiario += data.valor || 0;
+        });
+
+        // 3. Taxa de Ocupação (exemplo: contar slots ocupados / slots totais)
+        // Suponha coleção "slots" com campo data e "ocupado" boolean
+        const slotsRef = collection(db, "slots");
+        const qSlotsHoje = query(slotsRef, where("data", "==", hoje));
+        const snapshotSlots = await getDocs(qSlotsHoje);
+        const totalSlots = snapshotSlots.size;
+        let ocupados = 0;
+        snapshotSlots.forEach(doc => {
+          const data = doc.data();
+          if (data.ocupado) ocupados += 1;
+        });
+        const taxaOcupacao = totalSlots > 0 ? Math.round((ocupados / totalSlots) * 100) : 0;
+
+        // 4. Feedback Médio (supondo coleção avaliações com campo 'nota')
+        const avaliacoesRef = collection(db, "avaliacoes");
+        const snapshotAvaliacoes = await getDocs(avaliacoesRef);
+        let somaNotas = 0;
+        let totalAvaliacoes = 0;
+        snapshotAvaliacoes.forEach(doc => {
+          const data = doc.data();
+          if (typeof data.nota === "number") {
+            somaNotas += data.nota;
+            totalAvaliacoes += 1;
+          }
+        });
+        const feedbackMedio = totalAvaliacoes > 0 ? (somaNotas / totalAvaliacoes).toFixed(1) : "Sem avaliações";
+
+        setDados({
+          agendamentosHoje,
+          faturamentoDiario,
+          taxaOcupacao,
+          feedbackMedio: typeof feedbackMedio === "string" ? 0 : Number(feedbackMedio),
+        });
+      } catch (err) {
+        console.error("Erro ao carregar dashboard:", err);
+        setError("Erro ao carregar dados. Tente novamente mais tarde.");
+      }
+
+      setLoading(false);
+    }
+
+    fetchDashboardData();
+  }, []);
+
+  if (loading) return <div className="p-8 text-white">Carregando dados do dashboard...</div>;
+  if (error) return <div className="p-8 text-red-500 font-bold">{error}</div>;
+  if (!dados)
+    return <div className="p-8 text-white">Nenhum dado disponível no momento.</div>;
+
+  const kpis = [
+    { title: "Agendamentos Hoje", value: dados.agendamentosHoje },
+    { title: "Faturamento Diário", value: `R$ ${dados.faturamentoDiario}` },
+    { title: "Taxa de Ocupação", value: `${dados.taxaOcupacao}%` },
+    { title: "Feedback Médio", value: dados.feedbackMedio },
+  ];
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="p-8">
+      <h1 className="text-3xl font-bold text-gray-400 mb-8">Dashboard</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {kpis.map((kpi, i) => (
+          <div
+            key={i}
+            className="bg-navy-900 border border-navy-800 p-6 rounded-xl hover:border-gold-500 transition-colors"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+            <h3 className="text-slate-400 text-sm">{kpi.title}</h3>
+            <p className="text-2xl font-bold text-gray-400 mt-2">{kpi.value}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
