@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, getDocs, Timestamp, onSnapshot } from "firebase/firestore";
+import { collection, query, where, Timestamp, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 interface Agendamento {
@@ -34,23 +34,60 @@ export default function DashboardPage() {
   }
 
   function formatarValor(valor: number) {
-    return valor.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
+    return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
   useEffect(() => {
     setLoading(true);
     setError(null);
 
-    // Definir intervalo do dia para filtro Firestore
     const hojeInicio = new Date();
     hojeInicio.setHours(0, 0, 0, 0);
     const hojeFim = new Date();
     hojeFim.setHours(23, 59, 59, 999);
 
-    // Query Firestore para agendamentos do dia
+    // Consulta slots e avaliações ficam via getDocs pois mudam menos e não precisam de listener
+    async function fetchSlotsETaxaFeedback() {
+      try {
+        // Fetch slots para taxa ocupação
+        const slotsRef = collection(db, "slots");
+        const qSlots = query(
+          slotsRef,
+          where("data", ">=", Timestamp.fromDate(hojeInicio)),
+          where("data", "<=", Timestamp.fromDate(hojeFim))
+        );
+        const snapshotSlots = await getDocs(qSlots);
+
+        const totalSlots = snapshotSlots.size;
+        let ocupados = 0;
+        snapshotSlots.forEach((doc) => {
+          const data = doc.data();
+          if (data.ocupado) ocupados++;
+        });
+        const taxaOcupacao = totalSlots > 0 ? Math.round((ocupados / totalSlots) * 100) : 0;
+
+        // Fetch avaliações para feedback médio
+        const avaliacoesRef = collection(db, "avaliacoes");
+        const snapshotAvaliacoes = await getDocs(avaliacoesRef);
+
+        let somaNotas = 0;
+        let totalAvaliacoes = 0;
+        snapshotAvaliacoes.forEach((doc) => {
+          const data = doc.data();
+          if (typeof data.nota === "number") {
+            somaNotas += data.nota;
+            totalAvaliacoes++;
+          }
+        });
+        const feedbackMedio = totalAvaliacoes > 0 ? parseFloat((somaNotas / totalAvaliacoes).toFixed(1)) : 5.0;
+
+        return { taxaOcupacao, feedbackMedio };
+      } catch (error) {
+        setError("Erro ao carregar dados auxiliares.");
+        return { taxaOcupacao: 0, feedbackMedio: 5.0 };
+      }
+    }
+
     const agendamentosRef = collection(db, "agendamentos");
     const qAgendamentos = query(
       agendamentosRef,
@@ -58,88 +95,60 @@ export default function DashboardPage() {
       where("data", "<=", Timestamp.fromDate(hojeFim))
     );
 
-    // Para sincronizar em tempo real, use onSnapshot abaixo (opcional)
-    // const unsubscribe = onSnapshot(qAgendamentos, (snapshot) => {
-    //   processarDados(snapshot.docs);
-    // });
-
-    // Aqui manteremos getDocs para fetch único
-    getDocs(qAgendamentos)
-      .then((snapshotAgendamentos) => {
-        const listaAgendamentos: Agendamento[] = snapshotAgendamentos.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            cliente: data.cliente || "",
-            servico: data.servico || "",
-            data: data.data || "",
-            horario: data.horario || "",
-            valor:
-              typeof data.valor === "number"
-                ? data.valor
-                : parseFloat(
-                    (data.valor || "")
-                      .toString()
-                      .replace(/[^\d.,]/g, "")
-                      .replace(",", ".")
-                  ) || 0,
-            status: data.status || "pendente",
-          };
-        });
-
-        const agendamentosHoje = listaAgendamentos.length;
-        let faturamentoDiario = listaAgendamentos.reduce((acc, ag) => acc + ag.valor, 0);
-
-        // Consulta slots para taxa de ocupação
-        const slotsRef = collection(db, "slots");
-        return getDocs(
-          query(slotsRef, where("data", ">=", Timestamp.fromDate(hojeInicio)), where("data", "<=", Timestamp.fromDate(hojeFim)))
-        ).then((snapshotSlots) => {
-          const totalSlots = snapshotSlots.size;
-          let ocupados = 0;
-          snapshotSlots.forEach((doc) => {
+    // Abre listener em tempo real para agendamentos do dia
+    const unsubscribe = onSnapshot(
+      qAgendamentos,
+      async (snapshotAgendamentos) => {
+        try {
+          const listaAgendamentos: Agendamento[] = snapshotAgendamentos.docs.map((doc) => {
             const data = doc.data();
-            if (data.ocupado) ocupados++;
+            return {
+              id: doc.id,
+              cliente: data.cliente || "",
+              servico: data.servico || "",
+              data: data.data || "",
+              horario: data.horario || "",
+              valor:
+                typeof data.valor === "number"
+                  ? data.valor
+                  : parseFloat(
+                      (data.valor || "")
+                        .toString()
+                        .replace(/[^\d.,]/g, "")
+                        .replace(",", ".")
+                    ) || 0,
+              status: data.status || "pendente",
+            };
           });
-          const taxaOcupacao = totalSlots > 0 ? Math.round((ocupados / totalSlots) * 100) : 0;
 
-          // Consulta avaliações para feedback médio
-          const avaliacoesRef = collection(db, "avaliacoes");
-          return getDocs(avaliacoesRef).then((snapshotAvaliacoes) => {
-            let somaNotas = 0;
-            let totalAvaliacoes = 0;
-            snapshotAvaliacoes.forEach((doc) => {
-              const data = doc.data();
-              if (typeof data.nota === "number") {
-                somaNotas += data.nota;
-                totalAvaliacoes++;
-              }
-            });
-            const feedbackMedio = totalAvaliacoes > 0 ? parseFloat((somaNotas / totalAvaliacoes).toFixed(1)) : 5.0;
+          const agendamentosHoje = listaAgendamentos.length;
+          const faturamentoDiario = listaAgendamentos.reduce((sum, ag) => sum + ag.valor, 0);
 
-            setDados({
-              agendamentosHoje,
-              faturamentoDiario,
-              taxaOcupacao,
-              feedbackMedio,
-              listaAgendamentos,
-            });
+          const { taxaOcupacao, feedbackMedio } = await fetchSlotsETaxaFeedback();
+
+          setDados({
+            agendamentosHoje,
+            faturamentoDiario,
+            taxaOcupacao,
+            feedbackMedio,
+            listaAgendamentos,
           });
-        });
-      })
-      .catch((err) => {
-        console.error("Erro ao carregar dados do Dashboard:", err);
-        setError("Erro ao carregar dados. Tente novamente mais tarde.");
-      })
-      .finally(() => {
+          setLoading(false);
+        } catch (error) {
+          setError("Erro ao processar dados do dashboard.");
+          setLoading(false);
+        }
+      },
+      (error) => {
+        setError("Erro ao escutar dados do Firestore.");
         setLoading(false);
-      });
+      }
+    );
 
-    // return () => unsubscribe && unsubscribe(); // se usar onSnapshot
+    return () => unsubscribe();
   }, []);
 
-  if (loading)
-    return <div className="p-8 text-white">Carregando dados do dashboard...</div>;
+  if (loading) return <div className="p-8 text-white">Carregando dados do dashboard...</div>;
   if (error) return <div className="p-8 text-red-500 font-bold">{error}</div>;
   if (!dados) return <div className="p-8 text-white">Nenhum dado disponível no momento.</div>;
 
@@ -170,13 +179,8 @@ export default function DashboardPage() {
         <h2 className="text-xl font-semibold mb-4">Agendamentos do Dia</h2>
         <ol className="list-decimal list-inside space-y-2">
           {dados.listaAgendamentos.map((agendamento) => (
-            <li
-              key={agendamento.id}
-              className="hover:bg-navy-800 p-2 rounded"
-            >
-              <strong>{agendamento.cliente}</strong> - {agendamento.servico} -{" "}
-              {formatarData(agendamento.data)} - {agendamento.horario} -{" "}
-              {formatarValor(agendamento.valor)}
+            <li key={agendamento.id} className="hover:bg-navy-800 p-2 rounded">
+              <strong>{agendamento.cliente}</strong> - {agendamento.servico} - {formatarData(agendamento.data)} - {agendamento.horario} - {formatarValor(agendamento.valor)}
             </li>
           ))}
         </ol>
