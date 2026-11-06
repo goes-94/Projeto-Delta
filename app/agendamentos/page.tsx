@@ -1,21 +1,31 @@
 "use client";
 
 import Link from "next/link";
-
 import { useEffect, useState } from "react";
 import { Plus, Search, Filter } from "lucide-react";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
-
-
 
 interface Agendamento {
   id: string;
   cliente: string;
   servico: string;
-  data: string;
+  data: Timestamp | string;   // pode vir Timestamp ou string (se houver)
   horario: string;
+  valor: Number  ;              // alterar para number (não Timestamp)
   status: string;
+}
+
+// Função para formatar preço em Real
+function formatarValor(valor: number) {
+  return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// Função para formatar data
+function formatarData(data: Timestamp | string) {
+  if (!data) return "";
+  if (typeof data === "string") return data;
+  return data.toDate().toLocaleDateString('pt-BR');
 }
 
 export default function AgendamentosPage() {
@@ -26,14 +36,12 @@ export default function AgendamentosPage() {
   useEffect(() => {
     async function buscarAgendamentos() {
       setLoading(true);
-
       try {
         const agendamentosRef = collection(db, "agendamentos");
         let q;
 
         if (searchTerm.trim()) {
-          // Para filtro dinâmico, Firestore não suporta OR, apenas AND
-          // Buscaremos agendamentos onde cliente começa com searchTerm
+          // Firestore não suporta OR, então buscamos por cliente que começa com searchTerm
           q = query(
             agendamentosRef,
             where("cliente", ">=", searchTerm),
@@ -46,12 +54,14 @@ export default function AgendamentosPage() {
         const snapshot = await getDocs(q);
         const lista: Agendamento[] = snapshot.docs.map((doc) => {
           const data = doc.data();
+          const valorRaw = data.valor;
           return {
             id: doc.id,
             cliente: data.cliente || "",
             servico: data.servico || "",
             data: data.data || "",
             horario: data.horario || "",
+            valor: typeof valorRaw === "number" ? valorRaw : parseFloat(valorRaw?.replace(/[^\d.,]/g, "").replace(",", ".") || "0"),            
             status: data.status || "pendente",
           };
         });
@@ -60,7 +70,6 @@ export default function AgendamentosPage() {
       } catch (error) {
         console.error("Erro ao buscar agendamentos:", error);
       }
-
       setLoading(false);
     }
 
@@ -69,21 +78,21 @@ export default function AgendamentosPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header da Página */}
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-white">Agendamentos</h1>
           <p className="text-slate-400">Gerencie a agenda da sua unidade</p>
         </div>
         <Link href="/calendario" passHref>
-            <button className="bg-gold-500 hover:bg-gold-600 text-navy-900 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all">
-                <Plus size={20} />
-                Novo Agendamento
-            </button>
+          <button className="bg-gold-500 hover:bg-gold-600 text-navy-900 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all">
+            <Plus size={20} />
+            Novo Agendamento
+          </button>
         </Link>
       </div>
 
-      {/* Barra de Filtros */}
+      {/* Filtros */}
       <div className="flex gap-4 bg-navy-900 p-4 rounded-xl border border-navy-800">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 text-slate-500" size={18} />
@@ -101,7 +110,7 @@ export default function AgendamentosPage() {
         </button>
       </div>
 
-      {/* Lista de Agendamentos */}
+      {/* Lista */}
       <div className="bg-navy-900 border border-navy-800 rounded-xl p-8">
         {loading ? (
           <p className="text-slate-400 text-center">Carregando agendamentos...</p>
@@ -114,7 +123,7 @@ export default function AgendamentosPage() {
                 <th className="text-left py-2 px-4">Cliente</th>
                 <th className="text-left py-2 px-4">Serviço</th>
                 <th className="text-left py-2 px-4">Data</th>
-                <th className="text-left py-2 px-4">Horário</th>
+                <th className="text-left py-2 px-4">Valor</th>
                 <th className="text-left py-2 px-4">Status</th>
               </tr>
             </thead>
@@ -123,8 +132,8 @@ export default function AgendamentosPage() {
                 <tr key={ag.id} className="border-b border-navy-800 hover:bg-navy-800 cursor-pointer">
                   <td className="py-2 px-4">{ag.cliente}</td>
                   <td className="py-2 px-4">{ag.servico}</td>
-                  <td className="py-2 px-4">{ag.data}</td>
-                  <td className="py-2 px-4">{ag.horario}</td>
+                  <td className="py-2 px-4">{formatarData(ag.data)}</td>
+                  <td className="py-2 px-4">{formatarValor(ag.valor)}</td>
                   <td className="py-2 px-4 capitalize">{ag.status}</td>
                 </tr>
               ))}

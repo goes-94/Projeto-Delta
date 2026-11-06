@@ -12,6 +12,8 @@ export default function CalendarioPage() {
     servico: "",
     data: "",
     horario: "",
+    valor: "",
+    status: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export default function CalendarioPage() {
         servico: form.servico,
         data: form.data,
         horario: form.horario,
+        valor: form.valor,
         status: "pendente",
         criadoEm: serverTimestamp(),
       });
@@ -68,6 +71,14 @@ export default function CalendarioPage() {
           name="data"
           type="date"
           value={form.data}
+          onChange={handleChange}
+          required
+          className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
+        />
+         <input
+          name="valor"
+          type="valor"
+          value={form.valor}
           onChange={handleChange}
           required
           className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-gold-500"

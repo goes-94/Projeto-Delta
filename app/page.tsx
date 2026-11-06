@@ -1,59 +1,101 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-interface DashboardData {
+interface Agendamento {
+  id: string;
+  cliente: string;
+  servico: string;
+  data: Timestamp | string;
+  horario: string;
+  valor: number;
+  status: string;
+}
+
+interface AgendamentosData {
   agendamentosHoje: number;
   faturamentoDiario: number;
   taxaOcupacao: number;
   feedbackMedio: number;
+  listaAgendamentos: Agendamento[];
 }
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [dados, setDados] = useState<DashboardData | null>(null);
+  const [dados, setDados] = useState<AgendamentosData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Função para formatar data no formato dd/mm/yyyy
+  function formatarData(data: Timestamp | string) {
+    if (!data) return "";
+    if (typeof data === "string") return data;
+    return data.toDate().toLocaleDateString('pt-BR');
+  }
+
+  // Função para formatar valores em R$
+  function formatarValor(valor: number) {
+    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
   useEffect(() => {
-    async function fetchDashboardData() {
+    async function fetchDadosDashboard() {
       setLoading(true);
       setError(null);
 
       try {
-        const hoje = new Date().toISOString().slice(0, 10); // formato yyyy-mm-dd
+        const hojeInicio = new Date();
+        hojeInicio.setHours(0, 0, 0, 0);
 
-        // 1. Agendamentos Hoje
+        const hojeFim = new Date();
+        hojeFim.setHours(23, 59, 59, 999);
+
+        // Consulta agendamentos do dia para contagem e lista completa
         const agendamentosRef = collection(db, "agendamentos");
-        const qAgendamentos = query(agendamentosRef, where("data", "==", hoje));
+        const qAgendamentos = query(
+          agendamentosRef,
+          where("data", ">=", Timestamp.fromDate(hojeInicio)),
+          where("data", "<=", Timestamp.fromDate(hojeFim))
+        );
         const snapshotAgendamentos = await getDocs(qAgendamentos);
-        const agendamentosHoje = snapshotAgendamentos.size;
-
-        // 2. Faturamento Diário (supondo coleção pagamentos com campo 'data' e 'valor')
-        const pagamentosRef = collection(db, "pagamentos");
-        const qPagamentos = query(pagamentosRef, where("data", "==", hoje));
-        const snapshotPagamentos = await getDocs(qPagamentos);
-        let faturamentoDiario = 0;
-        snapshotPagamentos.forEach(doc => {
+        const listaAgendamentos: Agendamento[] = snapshotAgendamentos.docs.map(doc => {
           const data = doc.data();
-          faturamentoDiario += data.valor || 0;
+          return {
+            id: doc.id,
+            cliente: data.cliente || "",
+            servico: data.servico || "",
+            data: data.data || "",
+            horario: data.horario || "",
+            valor: typeof data.valor === "number" ? data.valor : parseFloat(data.valor) || 0,
+            status: data.status || "pendente",
+          };
+        });
+        const agendamentosHoje = listaAgendamentos.length;
+
+        // Consulta pagamentos do dia para faturamento
+        let faturamentoDiario = 0;
+        listaAgendamentos.forEach(ag => {
+          faturamentoDiario += ag.valor;
         });
 
-        // 3. Taxa de Ocupação (exemplo: contar slots ocupados / slots totais)
-        // Suponha coleção "slots" com campo data e "ocupado" boolean
+        // Consulta slots para taxa de ocupação
         const slotsRef = collection(db, "slots");
-        const qSlotsHoje = query(slotsRef, where("data", "==", hoje));
-        const snapshotSlots = await getDocs(qSlotsHoje);
+        const qSlots = query(
+          slotsRef,
+          where("data", ">=", Timestamp.fromDate(hojeInicio)),
+          where("data", "<=", Timestamp.fromDate(hojeFim))
+        );
+        const snapshotSlots = await getDocs(qSlots);
         const totalSlots = snapshotSlots.size;
         let ocupados = 0;
         snapshotSlots.forEach(doc => {
           const data = doc.data();
-          if (data.ocupado) ocupados += 1;
+          if (data.ocupado) ocupados++;
         });
         const taxaOcupacao = totalSlots > 0 ? Math.round((ocupados / totalSlots) * 100) : 0;
 
-        // 4. Feedback Médio (supondo coleção avaliações com campo 'nota')
+        // Consulta avaliações para feedback médio
         const avaliacoesRef = collection(db, "avaliacoes");
         const snapshotAvaliacoes = await getDocs(avaliacoesRef);
         let somaNotas = 0;
@@ -62,42 +104,42 @@ export default function DashboardPage() {
           const data = doc.data();
           if (typeof data.nota === "number") {
             somaNotas += data.nota;
-            totalAvaliacoes += 1;
+            totalAvaliacoes++;
           }
         });
-        const feedbackMedio = totalAvaliacoes > 0 ? (somaNotas / totalAvaliacoes).toFixed(1) : "Sem avaliações";
+        const feedbackMedio = totalAvaliacoes > 0 ? parseFloat((somaNotas / totalAvaliacoes).toFixed(1)) : 5.0;
 
         setDados({
           agendamentosHoje,
           faturamentoDiario,
           taxaOcupacao,
-          feedbackMedio: typeof feedbackMedio === "string" ? 0 : Number(feedbackMedio),
+          feedbackMedio,
+          listaAgendamentos,
         });
-      } catch (err) {
-        console.error("Erro ao carregar dashboard:", err);
+      } catch (error) {
+        console.error("Erro ao carregar dados do Dashboard:", error);
         setError("Erro ao carregar dados. Tente novamente mais tarde.");
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     }
 
-    fetchDashboardData();
+    fetchDadosDashboard();
   }, []);
 
   if (loading) return <div className="p-8 text-white">Carregando dados do dashboard...</div>;
   if (error) return <div className="p-8 text-red-500 font-bold">{error}</div>;
-  if (!dados)
-    return <div className="p-8 text-white">Nenhum dado disponível no momento.</div>;
+  if (!dados) return <div className="p-8 text-white">Nenhum dado disponível no momento.</div>;
 
   const kpis = [
     { title: "Agendamentos Hoje", value: dados.agendamentosHoje },
-    { title: "Faturamento Diário", value: `R$ ${dados.faturamentoDiario}` },
+    { title: "Faturamento Diário", value: `R$ ${dados.faturamentoDiario.toFixed(2)}` },
     { title: "Taxa de Ocupação", value: `${dados.taxaOcupacao}%` },
     { title: "Feedback Médio", value: dados.feedbackMedio },
   ];
 
   return (
-    <div className="p-8">
+    <div className="p-8 space-y-8">
       <h1 className="text-3xl font-bold text-gray-400 mb-8">Dashboard</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -110,6 +152,18 @@ export default function DashboardPage() {
             <p className="text-2xl font-bold text-gray-400 mt-2">{kpi.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Lista enumerada de agendamentos */}
+      <div className="bg-navy-900 border border-navy-800 rounded-xl p-6 text-white max-w-2xl">
+        <h2 className="text-xl font-semibold mb-4">Agendamentos do Dia</h2>
+        <ol className="list-decimal list-inside space-y-2">
+          {dados.listaAgendamentos.map((agendamento, index) => (
+            <li key={agendamento.id} className="hover:bg-navy-800 p-2 rounded">
+              <strong>{agendamento.cliente}</strong> - {agendamento.servico} - {formatarData(agendamento.data)} - {agendamento.horario} - {formatarValor(agendamento.valor)}
+            </li>
+          ))}
+        </ol>
       </div>
     </div>
   );
