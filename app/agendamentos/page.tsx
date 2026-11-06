@@ -12,7 +12,7 @@ interface Agendamento {
   servico: string;
   data: Timestamp | string;   // pode vir Timestamp ou string (se houver)
   horario: string;
-  valor: Number  ;              // alterar para number (não Timestamp)
+  valor: number  ;              // alterar para number (não Timestamp)
   status: string;
 }
 

@@ -5,27 +5,50 @@ import { collection, onSnapshot, addDoc } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
 import { UserPlus, MoreVertical, Mail, Phone, Clock } from "lucide-react";
 
+// 1. Definição da interface para um Membro
+interface Membro {
+  id: string;
+  nome: string;
+  cargo: string;
+  status: string;
+  email: string;
+  telefone: string;
+  horarios: string[];
+}
+
 export default function EquipePage() {
-  const [membros, setMembros] = useState([]);
+  // 1. Tipagem do useState para membros
+  const [membros, setMembros] = useState<Membro[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
-  const [novoMembro, setNovoMembro] = useState({
+  // 1. Tipagem do useState para novoMembro (Omitindo 'id' pois ainda não existe)
+  const [novoMembro, setNovoMembro] = useState<Omit<Membro, 'id'>>({
     nome: "",
     cargo: "",
     status: "Disponível",
     email: "",
     telefone: "",
-    horarios: [], // para simplificar, pode ser array de strings
+    horarios: [],
   });
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "membros"), (snapshot) => {
-      const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Garantir que os dados do Firebase correspondam à interface Membro
+      const lista: Membro[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        nome: doc.data().nome || "",
+        cargo: doc.data().cargo || "",
+        status: doc.data().status || "Disponível",
+        email: doc.data().email || "",
+        telefone: doc.data().telefone || "",
+        horarios: doc.data().horarios || [], // Assumindo que horarios é um array
+      }));
       setMembros(lista);
     });
     return () => unsubscribe();
   }, []);
 
-  async function salvarMembro(e) {
+  // 2. Tipagem do parâmetro 'e'
+  async function salvarMembro(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     await addDoc(collection(db, "membros"), novoMembro);
     setModalAberto(false);
@@ -39,18 +62,19 @@ export default function EquipePage() {
     });
   }
 
-  function abrirEmail(email) {
+  // 2. Tipagem do parâmetro 'email'
+  function abrirEmail(email: string) {
     window.open(`mailto:${email}`, "_blank");
   }
 
-  function abrirWhatsApp(telefone) {
-    // Adaptar para DDI e formato correto do número
+  // 2. Tipagem do parâmetro 'telefone'
+  function abrirWhatsApp(telefone: string) {
     const numeroFormatado = telefone.replace(/\D/g, "");
     window.open(`https://wa.me/${numeroFormatado}`, "_blank");
   }
 
-  // Exemplo simples de popup com horários
-  function visualizarHorarios(horarios) {
+  // 2. Tipagem do parâmetro 'horarios'
+  function visualizarHorarios(horarios: string[]) {
     alert("Horários disponíveis:\n" + horarios.join("\n"));
   }
 
@@ -72,11 +96,11 @@ export default function EquipePage() {
 
       {/* Grid de membros */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {membros.map((membro) => (
+        {membros.map((membro) => ( // 'membro' agora é do tipo Membro
           <div key={membro.id} className="bg-navy-900 border border-navy-800 p-6 rounded-xl hover:border-gold-500/50 transition-all group">
             <div className="flex justify-between items-start">
               <div className="w-12 h-12 bg-navy-800 rounded-full flex items-center justify-center text-gold-500 font-bold border border-navy-700">
-                {membro.nome.split(" ").map(n => n[0]).join("").toUpperCase()}
+                {membro.nome.split(" ").map((n: string) => n[0]).join("").toUpperCase()} {/* 2. Tipagem do parâmetro 'n' */}
               </div>
               <button className="text-slate-500 hover:text-white">
                 <MoreVertical size={20} />
@@ -122,7 +146,8 @@ export default function EquipePage() {
                 placeholder="Nome"
                 className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 value={novoMembro.nome}
-                onChange={e => setNovoMembro({...novoMembro, nome: e.target.value})}
+                // 2. Tipagem do parâmetro 'e' no onChange
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNovoMembro({...novoMembro, nome: e.target.value})}
                 required
               />
               <input
@@ -130,7 +155,7 @@ export default function EquipePage() {
                 placeholder="Cargo"
                 className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 value={novoMembro.cargo}
-                onChange={e => setNovoMembro({...novoMembro, cargo: e.target.value})}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNovoMembro({...novoMembro, cargo: e.target.value})}
                 required
               />
               <input
@@ -138,7 +163,7 @@ export default function EquipePage() {
                 placeholder="Email"
                 className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 value={novoMembro.email}
-                onChange={e => setNovoMembro({...novoMembro, email: e.target.value})}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNovoMembro({...novoMembro, email: e.target.value})}
                 required
               />
               <input
@@ -146,12 +171,12 @@ export default function EquipePage() {
                 placeholder="Telefone"
                 className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 value={novoMembro.telefone}
-                onChange={e => setNovoMembro({...novoMembro, telefone: e.target.value})}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNovoMembro({...novoMembro, telefone: e.target.value})}
                 required
               />
               <select
                 value={novoMembro.status}
-                onChange={e => setNovoMembro({...novoMembro, status: e.target.value})}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNovoMembro({...novoMembro, status: e.target.value})} {/* 2. Tipagem para Select */}
                 className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 required
               >
