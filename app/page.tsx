@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 interface Agendamento {
@@ -27,39 +27,46 @@ export default function DashboardPage() {
   const [dados, setDados] = useState<AgendamentosData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Função para formatar data no formato dd/mm/yyyy
   function formatarData(data: Timestamp | string) {
     if (!data) return "";
     if (typeof data === "string") return data;
-    return data.toDate().toLocaleDateString('pt-BR');
+    return data.toDate().toLocaleDateString("pt-BR");
   }
 
-  // Função para formatar valores em R$
   function formatarValor(valor: number) {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    return valor.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
   }
 
   useEffect(() => {
-    async function fetchDadosDashboard() {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
-      try {
-        const hojeInicio = new Date();
-        hojeInicio.setHours(0, 0, 0, 0);
+    // Definir intervalo do dia para filtro Firestore
+    const hojeInicio = new Date();
+    hojeInicio.setHours(0, 0, 0, 0);
+    const hojeFim = new Date();
+    hojeFim.setHours(23, 59, 59, 999);
 
-        const hojeFim = new Date();
-        hojeFim.setHours(23, 59, 59, 999);
+    // Query Firestore para agendamentos do dia
+    const agendamentosRef = collection(db, "agendamentos");
+    const qAgendamentos = query(
+      agendamentosRef,
+      where("data", ">=", Timestamp.fromDate(hojeInicio)),
+      where("data", "<=", Timestamp.fromDate(hojeFim))
+    );
 
-        // Consulta agendamentos do dia para contagem e lista completa
-        const agendamentosRef = collection(db, "agendamentos");
-        const qAgendamentos = query(
-          agendamentosRef,
-          where("data", ">=", Timestamp.fromDate(hojeInicio)),
-          where("data", "<=", Timestamp.fromDate(hojeFim))
-        );
-        const snapshotAgendamentos = await getDocs(qAgendamentos);
-        const listaAgendamentos: Agendamento[] = snapshotAgendamentos.docs.map(doc => {
+    // Para sincronizar em tempo real, use onSnapshot abaixo (opcional)
+    // const unsubscribe = onSnapshot(qAgendamentos, (snapshot) => {
+    //   processarDados(snapshot.docs);
+    // });
+
+    // Aqui manteremos getDocs para fetch único
+    getDocs(qAgendamentos)
+      .then((snapshotAgendamentos) => {
+        const listaAgendamentos: Agendamento[] = snapshotAgendamentos.docs.map((doc) => {
           const data = doc.data();
           return {
             id: doc.id,
@@ -67,73 +74,78 @@ export default function DashboardPage() {
             servico: data.servico || "",
             data: data.data || "",
             horario: data.horario || "",
-            valor: typeof data.valor === "number" ? data.valor : parseFloat(data.valor) || 0,
+            valor:
+              typeof data.valor === "number"
+                ? data.valor
+                : parseFloat(
+                    (data.valor || "")
+                      .toString()
+                      .replace(/[^\d.,]/g, "")
+                      .replace(",", ".")
+                  ) || 0,
             status: data.status || "pendente",
           };
         });
-        const agendamentosHoje = listaAgendamentos.length;
 
-        // Consulta pagamentos do dia para faturamento
-        let faturamentoDiario = 0;
-        listaAgendamentos.forEach(ag => {
-          faturamentoDiario += ag.valor;
-        });
+        const agendamentosHoje = listaAgendamentos.length;
+        let faturamentoDiario = listaAgendamentos.reduce((acc, ag) => acc + ag.valor, 0);
 
         // Consulta slots para taxa de ocupação
         const slotsRef = collection(db, "slots");
-        const qSlots = query(
-          slotsRef,
-          where("data", ">=", Timestamp.fromDate(hojeInicio)),
-          where("data", "<=", Timestamp.fromDate(hojeFim))
-        );
-        const snapshotSlots = await getDocs(qSlots);
-        const totalSlots = snapshotSlots.size;
-        let ocupados = 0;
-        snapshotSlots.forEach(doc => {
-          const data = doc.data();
-          if (data.ocupado) ocupados++;
-        });
-        const taxaOcupacao = totalSlots > 0 ? Math.round((ocupados / totalSlots) * 100) : 0;
+        return getDocs(
+          query(slotsRef, where("data", ">=", Timestamp.fromDate(hojeInicio)), where("data", "<=", Timestamp.fromDate(hojeFim)))
+        ).then((snapshotSlots) => {
+          const totalSlots = snapshotSlots.size;
+          let ocupados = 0;
+          snapshotSlots.forEach((doc) => {
+            const data = doc.data();
+            if (data.ocupado) ocupados++;
+          });
+          const taxaOcupacao = totalSlots > 0 ? Math.round((ocupados / totalSlots) * 100) : 0;
 
-        // Consulta avaliações para feedback médio
-        const avaliacoesRef = collection(db, "avaliacoes");
-        const snapshotAvaliacoes = await getDocs(avaliacoesRef);
-        let somaNotas = 0;
-        let totalAvaliacoes = 0;
-        snapshotAvaliacoes.forEach(doc => {
-          const data = doc.data();
-          if (typeof data.nota === "number") {
-            somaNotas += data.nota;
-            totalAvaliacoes++;
-          }
-        });
-        const feedbackMedio = totalAvaliacoes > 0 ? parseFloat((somaNotas / totalAvaliacoes).toFixed(1)) : 5.0;
+          // Consulta avaliações para feedback médio
+          const avaliacoesRef = collection(db, "avaliacoes");
+          return getDocs(avaliacoesRef).then((snapshotAvaliacoes) => {
+            let somaNotas = 0;
+            let totalAvaliacoes = 0;
+            snapshotAvaliacoes.forEach((doc) => {
+              const data = doc.data();
+              if (typeof data.nota === "number") {
+                somaNotas += data.nota;
+                totalAvaliacoes++;
+              }
+            });
+            const feedbackMedio = totalAvaliacoes > 0 ? parseFloat((somaNotas / totalAvaliacoes).toFixed(1)) : 5.0;
 
-        setDados({
-          agendamentosHoje,
-          faturamentoDiario,
-          taxaOcupacao,
-          feedbackMedio,
-          listaAgendamentos,
+            setDados({
+              agendamentosHoje,
+              faturamentoDiario,
+              taxaOcupacao,
+              feedbackMedio,
+              listaAgendamentos,
+            });
+          });
         });
-      } catch (error) {
-        console.error("Erro ao carregar dados do Dashboard:", error);
+      })
+      .catch((err) => {
+        console.error("Erro ao carregar dados do Dashboard:", err);
         setError("Erro ao carregar dados. Tente novamente mais tarde.");
-      } finally {
+      })
+      .finally(() => {
         setLoading(false);
-      }
-    }
+      });
 
-    fetchDadosDashboard();
+    // return () => unsubscribe && unsubscribe(); // se usar onSnapshot
   }, []);
 
-  if (loading) return <div className="p-8 text-white">Carregando dados do dashboard...</div>;
+  if (loading)
+    return <div className="p-8 text-white">Carregando dados do dashboard...</div>;
   if (error) return <div className="p-8 text-red-500 font-bold">{error}</div>;
   if (!dados) return <div className="p-8 text-white">Nenhum dado disponível no momento.</div>;
 
   const kpis = [
     { title: "Agendamentos Hoje", value: dados.agendamentosHoje },
-    { title: "Faturamento Diário", value: `R$ ${dados.faturamentoDiario.toFixed(2)}` },
+    { title: "Faturamento Diário", value: formatarValor(dados.faturamentoDiario) },
     { title: "Taxa de Ocupação", value: `${dados.taxaOcupacao}%` },
     { title: "Feedback Médio", value: dados.feedbackMedio },
   ];
@@ -154,13 +166,17 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Lista enumerada de agendamentos */}
       <div className="bg-navy-900 border border-navy-800 rounded-xl p-6 text-white max-w-2xl">
         <h2 className="text-xl font-semibold mb-4">Agendamentos do Dia</h2>
         <ol className="list-decimal list-inside space-y-2">
-          {dados.listaAgendamentos.map((agendamento, index) => (
-            <li key={agendamento.id} className="hover:bg-navy-800 p-2 rounded">
-              <strong>{agendamento.cliente}</strong> - {agendamento.servico} - {formatarData(agendamento.data)} - {agendamento.horario} - {formatarValor(agendamento.valor)}
+          {dados.listaAgendamentos.map((agendamento) => (
+            <li
+              key={agendamento.id}
+              className="hover:bg-navy-800 p-2 rounded"
+            >
+              <strong>{agendamento.cliente}</strong> - {agendamento.servico} -{" "}
+              {formatarData(agendamento.data)} - {agendamento.horario} -{" "}
+              {formatarValor(agendamento.valor)}
             </li>
           ))}
         </ol>
