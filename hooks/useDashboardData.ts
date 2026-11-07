@@ -1,86 +1,102 @@
 import { useState, useEffect } from "react";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  Timestamp,
-  doc,
-  getDoc,
-} from "firebase/firestore";
+import { collection, query, where, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-interface DashboardData {
-  agendamentosHoje: number;
-  faturamentoDiario: number;
-  taxaOcupacao: number;
-  feedbackMedio: number;
+interface Agendamento {
+  id: string;
+  valor: number;
+  valorPago?: number;
+  data: Timestamp;
 }
 
-export function useDashboardData() {
-  const [dados, setDados] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+interface DashboardResumo {
+  agendamentosHoje: number;
+  faturamentoDiario: number;
+  ticketMedio: number;
+  // Você pode adicionar mais indicadores aqui, como taxaOcupacao, feedback, etc.
+}
+
+export function useDashboardResumo() {
+  const [dados, setDados] = useState<DashboardResumo | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function buscarDados() {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
 
-      try {
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-        const amanha = new Date(hoje);
-        amanha.setDate(hoje.getDate() + 1);
+    const hojeInicio = new Date();
+    hojeInicio.setHours(0, 0, 0, 0);
 
-        // 1. Buscar agendamentos do dia
-        const agendamentosRef = collection(db, "agendamentos");
-        const qAgend = query(
-          agendamentosRef,
-          where("data", ">=", Timestamp.fromDate(hoje)),
-          where("data", "<", Timestamp.fromDate(amanha))
-        );
-        const agendamentosSnap = await getDocs(qAgend);
-        const agendamentosHoje = agendamentosSnap.size;
+    const hojeFim = new Date();
+    hojeFim.setHours(23, 59, 59, 999);
 
-        // 2. Buscar faturamento do dia na coleção Relatorios (id é 'yyyy-MM-dd')
-        const docId = hoje.toISOString().slice(0, 10);
-        const relatorioRef = doc(db, "Relatorios", docId);
-        const relatorioSnap = await getDoc(relatorioRef);
-        const faturamentoDiario =
-          relatorioSnap.exists() && relatorioSnap.data().faturamento
-            ? relatorioSnap.data().faturamento
-            : 0;
+    const agendamentosRef = collection(db, "agendamentos");
+    const q = query(
+      agendamentosRef,
+      where("data", ">=", Timestamp.fromDate(hojeInicio)),
+      where("data", "<=", Timestamp.fromDate(hojeFim))
+    );
 
-        // 3. Calcular taxa de ocupação
-        const totalHorariosDisponiveis = 20;
-        const taxaOcupacao =
-          totalHorariosDisponiveis > 0
-            ? Math.round((agendamentosHoje / totalHorariosDisponiveis) * 100)
-            : 0;
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        try {
+          const agendamentos: Agendamento[] = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              data: data.data,
+              valor:
+                typeof data.valor === "number"
+                  ? data.valor
+                  : parseFloat(
+                      (data.valor || "")
+                        .toString()
+                        .replace(/[^\d.,]/g, "")
+                        .replace(",", ".")
+                    ) || 0,
+              valorPago:
+                typeof data.valorPago === "number"
+                  ? data.valorPago
+                  : parseFloat(
+                      (data.valorPago || "")
+                        .toString()
+                        .replace(/[^\d.,]/g, "")
+                        .replace(",", ".")
+                    ) || 0,
+            };
+          });
 
-        // 4. Feedback médio fixo (por enquanto)
-        const feedbackMedio = 5.0;
+          const agendamentosHoje = agendamentos.length;
+          const faturamentoDiario = agendamentos.reduce(
+            (acc, ag) => acc + (ag.valorPago || ag.valor || 0),
+            0
+          );
+          const ticketMedio =
+            agendamentosHoje > 0 ? faturamentoDiario / agendamentosHoje : 0;
 
-        // Atualiza estado explicitamente com objeto DashboardData
-        setDados({
-          agendamentosHoje,
-          faturamentoDiario,
-          taxaOcupacao,
-          feedbackMedio,
-        });
-      } catch (err) {
-        console.error("Erro ao buscar dados do dashboard:", err);
-        setError("Erro ao carregar dados do dashboard.");
-        setDados(null);
-      } finally {
+          setDados({
+            agendamentosHoje,
+            faturamentoDiario,
+            ticketMedio,
+          });
+          setLoading(false);
+          setError(null);
+        } catch (err) {
+          setError("Erro ao processar dados do dashboard.");
+          setLoading(false);
+          setDados(null);
+        }
+      },
+      (error) => {
+        setError("Erro na conexão com o Firestore.");
         setLoading(false);
+        setDados(null);
       }
-    }
+    );
 
-    buscarDados();
+    return () => unsubscribe();
   }, []);
 
   return { dados, loading, error };
 }
-    
