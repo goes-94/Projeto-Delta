@@ -29,7 +29,7 @@ export default function CalendarioPage() {
         servico: form.servico,
         data: form.data,
         horario: form.horario,
-        valor: form.valor,
+        valor: Number(form.valor),      // converte para number aqui
         status: "pendente",
         criadoEm: serverTimestamp(),
       });
@@ -75,9 +75,10 @@ export default function CalendarioPage() {
           required
           className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
         />
-         <input
+        <input
           name="valor"
-          type="valor"
+          type="number"
+          placeholder="Valor"
           value={form.valor}
           onChange={handleChange}
           required
