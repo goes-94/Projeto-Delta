@@ -13,7 +13,6 @@ interface DashboardResumo {
   agendamentosHoje: number;
   faturamentoDiario: number;
   ticketMedio: number;
-  // Você pode adicionar mais indicadores aqui, como taxaOcupacao, feedback, etc.
 }
 
 export function useDashboardResumo() {
@@ -30,9 +29,8 @@ export function useDashboardResumo() {
     const hojeFim = new Date();
     hojeFim.setHours(23, 59, 59, 999);
 
-    const agendamentosRef = collection(db, "agendamentos");
     const q = query(
-      agendamentosRef,
+      collection(db, "agendamentos"),
       where("data", ">=", Timestamp.fromDate(hojeInicio)),
       where("data", "<=", Timestamp.fromDate(hojeFim))
     );
@@ -46,24 +44,8 @@ export function useDashboardResumo() {
             return {
               id: doc.id,
               data: data.data,
-              valor:
-                typeof data.valor === "number"
-                  ? data.valor
-                  : parseFloat(
-                      (data.valor || "")
-                        .toString()
-                        .replace(/[^\d.,]/g, "")
-                        .replace(",", ".")
-                    ) || 0,
-              valorPago:
-                typeof data.valorPago === "number"
-                  ? data.valorPago
-                  : parseFloat(
-                      (data.valorPago || "")
-                        .toString()
-                        .replace(/[^\d.,]/g, "")
-                        .replace(",", ".")
-                    ) || 0,
+              valor: data.valor ?? 0,
+              valorPago: data.valorPago ?? 0,
             };
           });
 
