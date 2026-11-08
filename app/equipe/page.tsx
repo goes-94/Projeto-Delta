@@ -5,7 +5,6 @@ import { collection, onSnapshot, addDoc } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
 import { UserPlus, MoreVertical, Mail, Phone, Clock } from "lucide-react";
 
-// Interface para o Membro
 interface Membro {
   id: string;
   nome: string;
@@ -17,9 +16,9 @@ interface Membro {
 }
 
 export default function EquipePage() {
-  // Estado tipado corretamente
   const [membros, setMembros] = useState<Membro[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
+
   const [novoMembro, setNovoMembro] = useState<Omit<Membro, "id">>({
     nome: "",
     cargo: "",
@@ -47,25 +46,32 @@ export default function EquipePage() {
 
   async function salvarMembro(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    await addDoc(collection(db, "membros"), novoMembro);
-    setModalAberto(false);
-    setNovoMembro({
-      nome: "",
-      cargo: "",
-      status: "Disponível",
-      email: "",
-      telefone: "",
-      horarios: [],
-    });
+    try {
+      await addDoc(collection(db, "membros"), novoMembro);
+      setModalAberto(false);
+      setNovoMembro({
+        nome: "",
+        cargo: "",
+        status: "Disponível",
+        email: "",
+        telefone: "",
+        horarios: [],
+      });
+    } catch (error) {
+      console.error("Erro ao salvar membro:", error);
+      // Você pode adicionar exibição de mensagem de erro para usuário aqui
+    }
   }
 
   function abrirEmail(email: string) {
-    window.open(`mailto:${email}`, "_blank");
+    if (email) window.open(`mailto:${email}`, "_blank");
   }
 
   function abrirWhatsApp(telefone: string) {
-    const numeroFormatado = telefone.replace(/\D/g, "");
-    window.open(`https://wa.me/${numeroFormatado}`, "_blank");
+    if (telefone) {
+      const numeroFormatado = telefone.replace(/\D/g, "");
+      window.open(`https://wa.me/${numeroFormatado}`, "_blank");
+    }
   }
 
   function visualizarHorarios(horarios: string[]) {
@@ -88,7 +94,6 @@ export default function EquipePage() {
         </button>
       </div>
 
-      {/* Grid de membros */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {membros.map((membro) => (
           <div
@@ -146,7 +151,6 @@ export default function EquipePage() {
         ))}
       </div>
 
-      {/* Modal para adicionar membro */}
       {modalAberto && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
           <div className="bg-navy-900 p-6 rounded-lg w-full max-w-md relative">
@@ -164,50 +168,50 @@ export default function EquipePage() {
               <input
                 type="text"
                 placeholder="Nome"
-                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 value={novoMembro.nome}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setNovoMembro({ ...novoMembro, nome: e.target.value })
                 }
                 required
+                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
               />
               <input
                 type="text"
                 placeholder="Cargo"
-                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 value={novoMembro.cargo}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setNovoMembro({ ...novoMembro, cargo: e.target.value })
                 }
                 required
+                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
               />
               <input
                 type="email"
                 placeholder="Email"
-                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 value={novoMembro.email}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setNovoMembro({ ...novoMembro, email: e.target.value })
                 }
                 required
+                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
               />
               <input
                 type="tel"
                 placeholder="Telefone"
-                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 value={novoMembro.telefone}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setNovoMembro({ ...novoMembro, telefone: e.target.value })
                 }
                 required
+                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
               />
               <select
                 value={novoMembro.status}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                   setNovoMembro({ ...novoMembro, status: e.target.value })
                 }
-                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
                 required
+                className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
               >
                 <option>Disponível</option>
                 <option>Em atendimento</option>

@@ -10,27 +10,28 @@ interface Agendamento {
   id: string;
   cliente: string;
   servico: string;
-  data: Timestamp | string;   // pode vir Timestamp ou string (se houver)
+  data: Timestamp | string;
   horario: string;
-  valor: number  ;              // alterar para number (não Timestamp)
+  valor: number;  // Corrigido para number
   status: string;
 }
 
-// Função para formatar preço em Real
 function formatarValor(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-// Função para formatar data
 function formatarData(data: Timestamp | string) {
   if (!data) return "";
-  if (typeof data === "string") return data;
+  if (typeof data === "string") {
+    const d = new Date(data);
+    return isNaN(d.getTime()) ? "" : d.toLocaleDateString('pt-BR');
+  }
   return data.toDate().toLocaleDateString('pt-BR');
 }
 
 export default function AgendamentosPage() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -38,47 +39,39 @@ export default function AgendamentosPage() {
       setLoading(true);
       try {
         const agendamentosRef = collection(db, "agendamentos");
-        let q;
-
-        if (searchTerm.trim()) {
-          // Firestore não suporta OR, então buscamos por cliente que começa com searchTerm
-          q = query(
-            agendamentosRef,
-            where("cliente", ">=", searchTerm),
-            where("cliente", "<=", searchTerm + "\uf8ff")
-          );
-        } else {
-          q = query(agendamentosRef);
-        }
+        const q = searchTerm.trim()
+          ? query(
+              agendamentosRef,
+              where("cliente", ">=", searchTerm),
+              where("cliente", "<=", searchTerm + "\uf8ff")
+            )
+          : query(agendamentosRef);
 
         const snapshot = await getDocs(q);
         const lista: Agendamento[] = snapshot.docs.map((doc) => {
           const data = doc.data();
-          const valorRaw = data.valor;
           return {
             id: doc.id,
             cliente: data.cliente || "",
             servico: data.servico || "",
             data: data.data || "",
             horario: data.horario || "",
-            valor: typeof valorRaw === "number" ? valorRaw : parseFloat(valorRaw?.replace(/[^\d.,]/g, "").replace(",", ".") || "0"),            
+            valor: typeof data.valor === "number" ? data.valor : 0,
             status: data.status || "pendente",
           };
         });
-
         setAgendamentos(lista);
       } catch (error) {
         console.error("Erro ao buscar agendamentos:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
-
     buscarAgendamentos();
   }, [searchTerm]);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-white">Agendamentos</h1>
@@ -92,7 +85,6 @@ export default function AgendamentosPage() {
         </Link>
       </div>
 
-      {/* Filtros */}
       <div className="flex gap-4 bg-navy-900 p-4 rounded-xl border border-navy-800">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 text-slate-500" size={18} />
@@ -101,7 +93,7 @@ export default function AgendamentosPage() {
             placeholder="Buscar por cliente ou serviço..."
             className="w-full bg-navy-800 border border-navy-700 rounded-lg py-2 pl-10 pr-4 text-white placeholder-slate-500 focus:outline-none focus:border-gold-500"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
           />
         </div>
         <button className="flex items-center gap-2 px-4 py-2 bg-navy-800 border border-navy-700 rounded-lg text-slate-300 hover:text-white">
@@ -110,7 +102,6 @@ export default function AgendamentosPage() {
         </button>
       </div>
 
-      {/* Lista */}
       <div className="bg-navy-900 border border-navy-800 rounded-xl p-8">
         {loading ? (
           <p className="text-slate-400 text-center">Carregando agendamentos...</p>
