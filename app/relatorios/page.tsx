@@ -6,6 +6,7 @@ import { db } from "../../firebaseConfig";
 
 interface FaturamentoDia {
   dia: string;
+  data: string;
   valor: number;
   percent: number;
 }
@@ -88,9 +89,10 @@ export default function RelatoriosPage() {
 
           valoresSemana.push({
             dia: diasSemana[diaAtual.getDay()],
+            data: diaAtual.toLocaleDateString("pt-BR"),
             valor: somaDia,
             percent: 0,
-          });
+            });
         }
 
         const maxValor = Math.max(...valoresSemana.map(v => v.valor)) || 1;
@@ -150,6 +152,9 @@ export default function RelatoriosPage() {
                 />
               </div>
               <span className="w-20 text-right text-white font-bold text-sm">{formatarValor(item.valor)}</span>
+              <span className="w-24 text-sm text-slate-400 font-medium">
+  {item.dia} - {item.data}
+</span>
             </div>
           ))}
         </div>
