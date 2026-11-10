@@ -1,5 +1,14 @@
+// hooks/useDashboardData.ts
+
 import { useState, useEffect } from "react";
-import { collection, query, where, Timestamp, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  Timestamp,
+  onSnapshot,
+} from "firebase/firestore";
+
 import { db } from "../firebaseConfig";
 
 interface Agendamento {
@@ -15,14 +24,17 @@ interface DashboardResumo {
   ticketMedio: number;
 }
 
-export function useDashboardResumo() {
-  const [dados, setDados] = useState<DashboardResumo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function useDashboardData() {
+  const [dados, setDados] =
+    useState<DashboardResumo | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-
     const hojeInicio = new Date();
     hojeInicio.setHours(0, 0, 0, 0);
 
@@ -31,54 +43,113 @@ export function useDashboardResumo() {
 
     const q = query(
       collection(db, "agendamentos"),
-      where("data", ">=", Timestamp.fromDate(hojeInicio)),
-      where("data", "<=", Timestamp.fromDate(hojeFim))
+      where(
+        "data",
+        ">=",
+        Timestamp.fromDate(hojeInicio)
+      ),
+      where(
+        "data",
+        "<=",
+        Timestamp.fromDate(hojeFim)
+      )
     );
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
         try {
-          const agendamentos: Agendamento[] = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              data: data.data,
-              valor: data.valor ?? 0,
-              valorPago: data.valorPago ?? 0,
-            };
-          });
 
-          const agendamentosHoje = agendamentos.length;
-          const faturamentoDiario = agendamentos.reduce(
-            (acc, ag) => acc + (ag.valorPago || ag.valor || 0),
-            0
+          console.log(
+            "Documentos encontrados:",
+            snapshot.size
           );
+
+          const agendamentos:
+            Agendamento[] =
+            snapshot.docs.map((doc) => {
+
+              const data = doc.data();
+
+              return {
+                id: doc.id,
+                data: data.data,
+
+                valor:
+                  typeof data.valor ===
+                  "number"
+                    ? data.valor
+                    : parseFloat(
+                        String(
+                          data.valor || 0
+                        )
+                      ),
+
+                valorPago:
+                  data.valorPago ?? 0,
+              };
+            });
+
+          const agendamentosHoje =
+            agendamentos.length;
+
+          const faturamentoDiario =
+            agendamentos.reduce(
+              (acc, item) =>
+                acc +
+                (item.valorPago ||
+                  item.valor ||
+                  0),
+              0
+            );
+
           const ticketMedio =
-            agendamentosHoje > 0 ? faturamentoDiario / agendamentosHoje : 0;
+            agendamentosHoje > 0
+              ? faturamentoDiario /
+                agendamentosHoje
+              : 0;
 
           setDados({
             agendamentosHoje,
             faturamentoDiario,
             ticketMedio,
           });
+
           setLoading(false);
-          setError(null);
         } catch (err) {
-          setError("Erro ao processar dados do dashboard.");
-          setLoading(false);
+
+          console.error(err);
+
+          setError(
+            "Erro ao processar dashboard."
+          );
+
           setDados(null);
+
+          setLoading(false);
         }
       },
       (error) => {
-        setError("Erro na conexão com o Firestore.");
-        setLoading(false);
+
+        console.error(error);
+
+        setError(
+          "Erro ao conectar ao Firestore."
+        );
+
         setDados(null);
+
+        setLoading(false);
       }
     );
 
     return () => unsubscribe();
+
   }, []);
 
-  return { dados, loading, error };
+  return {
+    dados,
+    loading,
+    error,
+  };
 }

@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { collection, query, where, Timestamp, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
+
 interface Agendamento {
   id: string;
   cliente: string;
   servico: string;
   data: Timestamp | string;
-  horario: string;
+  horario: string | Timestamp;
   valor: number;
   status: string;
 }
@@ -37,114 +38,248 @@ export default function DashboardPage() {
     return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
+useEffect(() => {
+  setLoading(true);
+  setError(null);
 
-    const hojeInicio = new Date();
-    hojeInicio.setHours(0, 0, 0, 0);
+  const agendamentosRef =
+    collection(db, "agendamentos");
 
-    const hojeFim = new Date();
-    hojeFim.setHours(23, 59, 59, 999);
+  const unsubscribe = onSnapshot(
+    agendamentosRef,
 
-    // Consulta para slots e avaliações (dados auxiliares)
-    async function buscarDadosAux() {
+    async (snapshot) => {
       try {
-        const slotsRef = collection(db, "slots");
-        const qSlots = query(
-          slotsRef,
-          where("data", ">=", Timestamp.fromDate(hojeInicio)),
-          where("data", "<=", Timestamp.fromDate(hojeFim))
+        console.log(
+          "===== DASHBOARD ====="
         );
 
-        const snapshotSlots = await getDocs(qSlots);
+        console.log(
+          "TOTAL DOCUMENTOS:",
+          snapshot.size
+        );
 
-        const totalSlots = snapshotSlots.size;
-        let ocupados = 0;
-        snapshotSlots.forEach((doc) => {
-          const data = doc.data();
-          if (data.ocupado) ocupados++;
-        });
-
-        const taxaOcupacao = totalSlots > 0 ? Math.round((ocupados / totalSlots) * 100) : 0;
-
-        const avaliacoesRef = collection(db, "avaliacoes");
-        const snapshotAvaliacoes = await getDocs(avaliacoesRef);
-
-        let somaNotas = 0;
-        let totalAvaliacoes = 0;
-        snapshotAvaliacoes.forEach((doc) => {
-          const data = doc.data();
-          if (typeof data.nota === "number") {
-            somaNotas += data.nota;
-            totalAvaliacoes++;
-          }
-        });
-
-        const feedbackMedio = totalAvaliacoes > 0 ? parseFloat((somaNotas / totalAvaliacoes).toFixed(1)) : 5.0;
-
-        return { taxaOcupacao, feedbackMedio };
-      } catch (err) {
-        setError("Erro ao carregar dados auxiliares.");
-        return { taxaOcupacao: 0, feedbackMedio: 5.0 };
-      }
-    }
-
-    const agendamentosRef = collection(db, "agendamentos");
-    const qAgendamentos = query(
-      agendamentosRef,
-      where("data", ">=", Timestamp.fromDate(hojeInicio)),
-      where("data", "<=", Timestamp.fromDate(hojeFim))
-    );
-
-    const unsubscribe = onSnapshot(
-      qAgendamentos,
-      async (snapshotAgendamentos) => {
-        try {
-          const listaAgendamentos: Agendamento[] = snapshotAgendamentos.docs.map((doc) => {
+        const listaAgendamentos: Agendamento[] =
+          snapshot.docs.map((doc) => {
             const data = doc.data();
+
+            let valor = 0;
+
+            if (
+              typeof data.valor ===
+              "number"
+            ) {
+              valor = data.valor;
+            } else if (
+              typeof data.valor ===
+              "string"
+            ) {
+              valor =
+                parseFloat(
+                  data.valor
+                    .replace("R$", "")
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+                    .trim()
+                ) || 0;
+            }
+
+            console.log(
+              "Documento:",
+              doc.id,
+              data
+            );
+
             return {
               id: doc.id,
-              cliente: data.cliente || "",
-              servico: data.servico || "",
-              data: data.data || "",
-              horario: data.horario || "",
-              valor:
-                typeof data.valor === "number"
-                  ? data.valor
-                  : 0, // como valor agora é double, garantimos que é número
-              status: data.status || "pendente",
+              cliente:
+                data.cliente ?? "",
+              servico:
+                data.servico ?? "",
+              data:
+                data.data ?? "",
+              horario:
+                data.horario ?? "",
+              valor,
+              status:
+                data.status ??
+                "pendente",
             };
           });
 
-          const agendamentosHoje = listaAgendamentos.length;
-          const faturamentoDiario = listaAgendamentos.reduce((acc, ag) => acc + ag.valor, 0);
+        const agendamentosHoje =
+          listaAgendamentos.length;
 
-          const { taxaOcupacao, feedbackMedio } = await buscarDadosAux();
+        const faturamentoDiario =
+          listaAgendamentos.reduce(
+            (acc, item) =>
+              acc + item.valor,
+            0
+          );
 
-          setDados({
-            agendamentosHoje,
-            faturamentoDiario,
-            taxaOcupacao,
-            feedbackMedio,
-            listaAgendamentos,
-          });
+        let taxaOcupacao = 0;
+        let feedbackMedio = 0;
 
-          setLoading(false);
-          setError(null);
+        /* SLOTS */
+
+        try {
+          const slotsSnapshot =
+            await getDocs(
+              collection(
+                db,
+                "slots"
+              )
+            );
+
+          const totalSlots =
+            slotsSnapshot.size;
+
+          let ocupados = 0;
+
+          slotsSnapshot.forEach(
+            (doc) => {
+              const slot =
+                doc.data();
+
+              if (
+                slot.ocupado === true
+              ) {
+                ocupados++;
+              }
+            }
+          );
+
+          taxaOcupacao =
+            totalSlots > 0
+              ? Math.round(
+                  (
+                    ocupados /
+                    totalSlots
+                  ) * 100
+                )
+              : 0;
+
+          console.log(
+            "TOTAL SLOTS:",
+            totalSlots
+          );
+
+          console.log(
+            "SLOTS OCUPADOS:",
+            ocupados
+          );
+
+          console.log(
+            "TAXA:",
+            taxaOcupacao +
+              "%"
+          );
         } catch (error) {
-          setError("Erro ao processar dados do dashboard.");
-          setLoading(false);
+          console.error(
+            "Erro Slots:",
+            error
+          );
         }
-      },
-      (error) => {
-        setError("Erro na conexão com Firestore.");
+
+        /* AVALIAÇÕES */
+
+        try {
+          const avaliacoesSnapshot =
+            await getDocs(
+              collection(
+                db,
+                "avaliacoes"
+              )
+            );
+
+          let somaNotas = 0;
+          let totalNotas = 0;
+
+          avaliacoesSnapshot.forEach(
+            (doc) => {
+              const avaliacao =
+                doc.data();
+
+              if (
+                typeof avaliacao.nota ===
+                "number"
+              ) {
+                somaNotas +=
+                  avaliacao.nota;
+
+                totalNotas++;
+              }
+            }
+          );
+
+          feedbackMedio =
+            totalNotas > 0
+              ? Number(
+                  (
+                    somaNotas /
+                    totalNotas
+                  ).toFixed(1)
+                )
+              : 0;
+
+          console.log(
+            "TOTAL NOTAS:",
+            totalNotas
+          );
+
+          console.log(
+            "MÉDIA:",
+            feedbackMedio
+          );
+        } catch (error) {
+          console.error(
+            "Erro Avaliações:",
+            error
+          );
+        }
+
+        setDados({
+          agendamentosHoje,
+          faturamentoDiario,
+          taxaOcupacao,
+          feedbackMedio,
+          listaAgendamentos,
+        });
+
+        setLoading(false);
+        setError(null);
+      } catch (error) {
+        console.error(
+          "Erro Dashboard:",
+          error
+        );
+
+        setError(
+          "Erro ao processar dados."
+        );
+
         setLoading(false);
       }
-    );
+    },
 
-    return () => unsubscribe();
-  }, []);
+    (error) => {
+      console.error(
+        "Erro Firestore:",
+        error
+      );
+
+      setError(
+        "Erro na conexão com Firestore."
+      );
+
+      setLoading(false);
+    }
+  );
+
+  return () => unsubscribe();
+
+}, []);
+
 
   if (loading) return <div className="p-8 text-white">Carregando dados...</div>;
   if (error) return <div className="p-8 text-red-500">{error}</div>;
@@ -176,7 +311,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="bg-navy-900 p-6 rounded-xl border border-navy-800 max-w-2xl">
+      {/* <div className="bg-navy-900 p-6 rounded-xl border border-navy-800 max-w-2xl">
         <h2 className="text-xl font-semibold mb-4">Agendamentos do Dia</h2>
         <ul className="list-disc list-inside">
           {dados.listaAgendamentos.map((ag) => (
@@ -185,7 +320,7 @@ export default function DashboardPage() {
             </li>
           ))}
         </ul>
-      </div>
+      </div> */}
     </div>
   );
 }

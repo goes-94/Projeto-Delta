@@ -5,6 +5,30 @@ import { useEffect, useState } from "react";
 import { Plus, Search, Filter } from "lucide-react";
 import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
+import { doc, updateDoc } from "firebase/firestore";
+
+async function alterarStatus(
+  id: string,
+  novoStatus: string
+) {
+  try {
+    await updateDoc(
+      doc(db, "agendamentos", id),
+      {
+        status: novoStatus,
+      }
+    );
+
+    console.log(
+      `Status atualizado para ${novoStatus}`
+    );
+  } catch (error) {
+    console.error(
+      "Erro ao atualizar status:",
+      error
+    );
+  }
+}
 
 interface Agendamento {
   id: string;
@@ -125,8 +149,49 @@ export default function AgendamentosPage() {
                   <td className="py-2 px-4">{ag.servico}</td>
                   <td className="py-2 px-4">{formatarData(ag.data)}</td>
                   <td className="py-2 px-4">{formatarValor(ag.valor)}</td>
-                  <td className="py-2 px-4 capitalize">{ag.status}</td>
+                  <td className="py-2 px-4">
+                    <select
+                        value={ag.status || "pendente"}
+                        onChange={(e) =>
+                        alterarStatus(
+                            ag.id,
+                            e.target.value
+                        )
+                        }
+                        className={`
+                        px-3 py-1 rounded-md
+                        text-sm font-medium
+                        border
+                        ${
+                            ag.status === "concluido"
+                            ? "bg-green-600 border-green-500 text-white"
+                            : ag.status === "cancelado"
+                            ? "bg-red-600 border-red-500 text-white"
+                            : ag.status === "confirmado"
+                            ? "bg-blue-600 border-blue-500 text-white"
+                            : "bg-yellow-600 border-yellow-500 text-white"
+                        }
+                        `}
+                        >
+                        <option value="pendente">
+                        Pendente
+                        </option>
+
+                        <option value="confirmado">
+                        Confirmado
+                        </option>
+
+                        <option value="concluido">
+                        Concluído
+                        </option>
+
+                        <option value="cancelado">
+                        Cancelado
+                        </option>
+                    </select>
+                    </td>
                 </tr>
+                
               ))}
             </tbody>
           </table>
