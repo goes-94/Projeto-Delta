@@ -107,76 +107,120 @@ useEffect(() => {
             };
           });
 
+        const hoje = new Date();
+
+const hojeBR =
+  hoje.toLocaleDateString("pt-BR");
+
+const agendamentosHojeLista =
+  listaAgendamentos.filter(
+    (item) => {
+      if (
+        !item.data ||
+        item.status ===
+          "cancelado"
+      ) {
+        return false;
+      }
+
+      const dataAgendamento =
+        typeof item.data ===
+        "string"
+          ? item.data
+          : item.data
+              .toDate()
+              .toLocaleDateString(
+                "pt-BR"
+              );
+
+      return (
+        dataAgendamento ===
+        hojeBR
+      );
+    }
+  );
+
         const agendamentosHoje =
-          listaAgendamentos.length;
+          agendamentosHojeLista.length;
 
         const faturamentoDiario =
-          listaAgendamentos.reduce(
-            (acc, item) =>
-              acc + item.valor,
-            0
-          );
+          agendamentosHojeLista
+            .filter(
+              (item) =>
+                item.status ===
+                "concluido"
+            )
+            .reduce(
+              (acc, item) =>
+                acc + item.valor,
+              0
+            );
 
         let taxaOcupacao = 0;
         let feedbackMedio = 0;
 
         /* SLOTS */
 
+        /* MEMBROS */
+
         try {
-          const slotsSnapshot =
+          const membrosSnapshot =
             await getDocs(
               collection(
                 db,
-                "slots"
+                "membros"
               )
             );
 
-          const totalSlots =
-            slotsSnapshot.size;
+          const totalMembros =
+            membrosSnapshot.size;
 
-          let ocupados = 0;
+          const vagasPorMembro = 8;
 
-          slotsSnapshot.forEach(
-            (doc) => {
-              const slot =
-                doc.data();
+          const capacidadeDoDia =
+            totalMembros *
+            vagasPorMembro;
 
-              if (
-                slot.ocupado === true
-              ) {
-                ocupados++;
-              }
-            }
-          );
+          const ocupadosHoje =
+            agendamentosHojeLista.filter(
+              (agendamento) =>
+                agendamento.status !==
+                "cancelado"
+            ).length;
 
           taxaOcupacao =
-            totalSlots > 0
+            capacidadeDoDia > 0
               ? Math.round(
                   (
-                    ocupados /
-                    totalSlots
+                    ocupadosHoje /
+                    capacidadeDoDia
                   ) * 100
                 )
               : 0;
 
           console.log(
-            "TOTAL SLOTS:",
-            totalSlots
+            "MEMBROS:",
+            totalMembros
           );
 
           console.log(
-            "SLOTS OCUPADOS:",
-            ocupados
+            "CAPACIDADE DO DIA:",
+            capacidadeDoDia
           );
 
           console.log(
-            "TAXA:",
-            taxaOcupacao +
-              "%"
+            "AGENDAMENTOS HOJE:",
+            ocupadosHoje
           );
+
+          console.log(
+            "TAXA DE OCUPAÇÃO:",
+            taxaOcupacao + "%"
+          );
+
         } catch (error) {
           console.error(
-            "Erro Slots:",
+            "Erro ao consultar membros:",
             error
           );
         }

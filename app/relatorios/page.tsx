@@ -18,7 +18,9 @@ interface FaturamentoDia {
 }
 
 export default function RelatoriosPage() {
-  const [receitaMensal, setReceitaMensal] = useState(0);
+  const [receitaPrevista, setReceitaPrevista] = useState(0);
+  const [receitaRealizada, setReceitaRealizada] =
+    useState(0);
   const [ticketMedio, setTicketMedio] = useState(0);
   const [agendamentosCount, setAgendamentosCount] = useState(0);
   const [faturamentoSemanal, setFaturamentoSemanal] = useState<
@@ -48,25 +50,63 @@ export default function RelatoriosPage() {
 
         const pagamentosSnapshot = await getDocs(qPagamentos);
 
-        let somaPagamentos = 0;
+        let somaPrevista = 0;
+        let somaRealizada = 0;
+        let totalAgendamentos = 0;
 
         pagamentosSnapshot.forEach((doc) => {
-          const data = doc.data();
+        const item = doc.data();
 
-          if (typeof data.valor === "number") {
-            somaPagamentos += data.valor;
-          }
+        if (
+            typeof item.valor !== "number"
+        ) {
+            return;
+        }
+
+        // cancelado não conta para nada
+        if (
+            item.status === "cancelado"
+        ) {
+            return;
+        }
+
+        totalAgendamentos++;
+
+        // previsto
+        // Receita prevista
+        if (
+        item.status === "pendente" ||
+        item.status === "confirmado"
+        ) {
+        somaPrevista += item.valor;
+        }
+
+        // Receita realizada
+        if (
+        item.status === "concluido"
+        ) {
+        somaRealizada += item.valor;
+        }
         });
 
-        setReceitaMensal(somaPagamentos);
+        setReceitaPrevista(
+        somaPrevista
+        );
 
-        const totalAgendamentosMes = pagamentosSnapshot.size;
+        setReceitaRealizada(
+        somaRealizada
+        );
 
-        setAgendamentosCount(totalAgendamentosMes);
+        setAgendamentosCount(
+        totalAgendamentos
+        );
 
         setTicketMedio(
-          totalAgendamentosMes > 0
-            ? Math.round(somaPagamentos / totalAgendamentosMes)
+        totalAgendamentos > 0
+            ? Math.round(
+                somaRealizada /
+                totalAgendamentos
+            )
             : 0
         );
 
@@ -75,73 +115,87 @@ export default function RelatoriosPage() {
         // =========================
 
         const diasSemana = [
-          "Dom",
-          "Seg",
-          "Ter",
-          "Qua",
-          "Qui",
-          "Sex",
-          "Sáb",
+        "Dom",
+        "Seg",
+        "Ter",
+        "Qua",
+        "Qui",
+        "Sex",
+        "Sáb",
         ];
 
         const valoresSemana: FaturamentoDia[] = [];
 
         for (let i = 6; i >= 0; i--) {
-          const diaAtual = new Date();
+        const diaAtual = new Date();
+        diaAtual.setDate(hoje.getDate() - i);
 
-          diaAtual.setDate(hoje.getDate() - i);
-          diaAtual.setHours(0, 0, 0, 0);
+        let somaDia = 0;
 
-          let somaDia = 0;
-
-          pagamentosSnapshot.forEach((doc) => {
+        pagamentosSnapshot.forEach((doc) => {
             const item = doc.data();
 
-            if (!item.data || typeof item.valor !== "number") {
-                return;
-            }
-
-            const dataAgendamento = item.data.toDate();
-
-            console.log("==============");
-            console.log("Valor:", item.valor);
-            console.log("Date:", dataAgendamento);
-            console.log("ISO:", dataAgendamento.toISOString());
-            console.log(
-                "Local BR:",
-                dataAgendamento.toLocaleString("pt-BR")
-            );
-            console.log(
-                "Data BR:",
-                dataAgendamento.toLocaleDateString("pt-BR")
-            );
-
-            const dataNormalizada = new Date(dataAgendamento);
-            dataNormalizada.setHours(0, 0, 0, 0);
-
+            // Ignora registros inválidos
             if (
-                dataNormalizada.getTime() === diaAtual.getTime()
+            !item.data ||
+            typeof item.valor !== "number"
             ) {
-                somaDia += item.valor;
+            return;
             }
-            });
-         
 
-          valoresSemana.push({
+            // Ignora cancelados
+            if (item.status === "cancelado") {
+            return;
+            }
+
+            const dataAgendamento =
+            item.data.toDate();
+
+            // Compara usando a data formatada
+            // para evitar problemas de timezone
+            const dataItem =
+            dataAgendamento.toLocaleDateString(
+                "pt-BR"
+            );
+
+            const dataTela =
+            diaAtual.toLocaleDateString(
+                "pt-BR"
+            );
+
+            if (dataItem === dataTela) {
+            somaDia += item.valor;
+            }
+        });
+
+        valoresSemana.push({
             dia: diasSemana[diaAtual.getDay()],
-            data: diaAtual.toLocaleDateString("pt-BR"),
+            data: diaAtual.toLocaleDateString(
+            "pt-BR"
+            ),
             valor: somaDia,
             percent: 0,
-          });
+        });
         }
 
         const maxValor =
-          Math.max(...valoresSemana.map((v) => v.valor)) || 1;
+        Math.max(
+            ...valoresSemana.map(
+            (v) => v.valor
+            )
+        ) || 1;
 
-        const valoresComPercent = valoresSemana.map((v) => ({
-          ...v,
-          percent: Math.round((v.valor / maxValor) * 100),
+        const valoresComPercent =
+        valoresSemana.map((v) => ({
+            ...v,
+            percent: Math.round(
+            (v.valor / maxValor) * 100
+            ),
         }));
+
+        setFaturamentoSemanal(
+        valoresComPercent
+        );
 
         setFaturamentoSemanal(valoresComPercent);
       } catch (error) {
@@ -176,11 +230,21 @@ export default function RelatoriosPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-navy-900 border border-navy-800 p-6 rounded-xl">
           <p className="text-slate-400 text-sm">
-            Receita Mensal
-          </p>
-          <h3 className="text-2xl font-bold text-white mt-1">
-            {formatarValor(receitaMensal)}
-          </h3>
+            Receita Prevista
+            </p>
+
+            <h3 className="text-2xl font-bold text-yellow-400 mt-1">
+            {formatarValor(receitaPrevista)}
+            </h3>
+        </div>
+        <div className="bg-navy-900 border border-navy-800 p-6 rounded-xl">
+            <p className="text-slate-400 text-sm">
+                Receita Realizada
+            </p>
+
+            <h3 className="text-2xl font-bold text-green-400 mt-1">
+                {formatarValor(receitaRealizada)}
+            </h3>
         </div>
 
         <div className="bg-navy-900 border border-navy-800 p-6 rounded-xl">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "../../firebaseConfig";
 import {
@@ -8,14 +8,21 @@ import {
   addDoc,
   serverTimestamp,
   Timestamp,
+  getDocs,
 } from "firebase/firestore";
 
 export default function CalendarioPage() {
   const router = useRouter();
 
+  const [membros, setMembros] = useState<
+    { id: string; nome: string }[]
+  >([]);
+
   const [form, setForm] = useState({
     cliente: "",
     servico: "",
+    membro: "",
+    membroId:"",
     data: "",
     horario: "",
     valor: "",
@@ -23,6 +30,30 @@ export default function CalendarioPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function carregarMembros() {
+      try {
+        const snapshot = await getDocs(
+          collection(db, "membros")
+        );
+
+        const lista = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          nome: doc.data().nome || "",
+        }));
+
+        setMembros(lista);
+      } catch (error) {
+        console.error(
+          "Erro ao carregar membros:",
+          error
+        );
+      }
+    }
+
+    carregarMembros();
+  }, []);
 
   async function salvarAgendamento(
     e: React.FormEvent
@@ -33,7 +64,6 @@ export default function CalendarioPage() {
     setError(null);
 
     try {
-      // Evita problemas de timezone
       const [ano, mes, dia] = form.data
         .split("-")
         .map(Number);
@@ -43,7 +73,7 @@ export default function CalendarioPage() {
           ano,
           mes - 1,
           dia,
-          12, // meio-dia para evitar UTC voltar um dia
+          12,
           0,
           0
         )
@@ -52,6 +82,8 @@ export default function CalendarioPage() {
       await addDoc(collection(db, "agendamentos"), {
         cliente: form.cliente,
         servico: form.servico,
+        membro: form.membro,
+        membroId: form.membroId,
         data: dataTimestamp,
         horario: form.horario,
         valor: Number(form.valor),
@@ -72,7 +104,9 @@ export default function CalendarioPage() {
   }
 
   function handleChange(
-    e: React.ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement
+    >
   ) {
     setForm({
       ...form,
@@ -109,6 +143,39 @@ export default function CalendarioPage() {
           required
           className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
         />
+
+        <select
+        value={form.membroId}
+        onChange={(e) => {
+            const membroSelecionado =
+            membros.find(
+                (m) => m.id === e.target.value
+            );
+
+            if (!membroSelecionado) return;
+
+            setForm({
+            ...form,
+            membroId: membroSelecionado.id,
+            membro: membroSelecionado.nome,
+            });
+        }}
+        required
+        className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
+        >
+        <option value="" className="text-slate-500">
+            Selecione um membro
+        </option>
+
+        {membros.map((membro) => (
+            <option
+            key={membro.id}
+            value={membro.id}
+            >
+            {membro.nome}
+            </option>
+        ))}
+        </select>
 
         <input
           name="data"

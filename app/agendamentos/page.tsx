@@ -22,11 +22,15 @@ async function alterarStatus(
     console.log(
       `Status atualizado para ${novoStatus}`
     );
+
+    return true;
   } catch (error) {
     console.error(
       "Erro ao atualizar status:",
       error
     );
+
+    return false;
   }
 }
 
@@ -152,43 +156,58 @@ export default function AgendamentosPage() {
                   <td className="py-2 px-4">
                     <select
                         value={ag.status || "pendente"}
-                        onChange={(e) =>
-                        alterarStatus(
+                        onChange={async (e) => {
+                            const novoStatus = e.target.value;
+
+                            const sucesso = await alterarStatus(
                             ag.id,
-                            e.target.value
-                        )
-                        }
+                            novoStatus
+                            );
+
+                            if (sucesso) {
+                            setAgendamentos((lista) =>
+                                lista.map((item) =>
+                                item.id === ag.id
+                                    ? {
+                                        ...item,
+                                        status: novoStatus,
+                                    }
+                                    : item
+                                )
+                            );
+                            }
+                        }}
                         className={`
-                        px-3 py-1 rounded-md
-                        text-sm font-medium
-                        border
-                        ${
+                            px-3 py-1 rounded-md
+                            text-sm font-medium
+                            border
+                            ${
                             ag.status === "concluido"
-                            ? "bg-green-600 border-green-500 text-white"
-                            : ag.status === "cancelado"
-                            ? "bg-red-600 border-red-500 text-white"
-                            : ag.status === "confirmado"
-                            ? "bg-blue-600 border-blue-500 text-white"
-                            : "bg-yellow-600 border-yellow-500 text-white"
-                        }
+                                ? "bg-green-600 border-green-500 text-white"
+                                : ag.status === "cancelado"
+                                ? "bg-red-600 border-red-500 text-white"
+                                : ag.status === "confirmado"
+                                ? "bg-blue-600 border-blue-500 text-white"
+                                : "bg-yellow-600 border-yellow-500 text-white"
+                            }
                         `}
                         >
                         <option value="pendente">
-                        Pendente
+                            Pendente
                         </option>
 
                         <option value="confirmado">
-                        Confirmado
+                            Confirmado
                         </option>
 
                         <option value="concluido">
-                        Concluído
+                            Concluído
                         </option>
 
                         <option value="cancelado">
-                        Cancelado
+                            Cancelado
                         </option>
-                    </select>
+                        </select>
                     </td>
                 </tr>
                 
