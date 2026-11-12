@@ -30,6 +30,21 @@ export default function EquipePage() {
     horarios: [],
   });
 
+  
+
+  const [agora, setAgora] = useState(
+    new Date()
+  );
+
+  useEffect(() => {
+    const intervalo = setInterval(() => {
+      setAgora(new Date());
+    }, 60000); // atualiza a cada minuto
+
+    return () =>
+      clearInterval(intervalo);
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "membros"), (snapshot) => {
       const lista: Membro[] = snapshot.docs.map((doc) => ({
@@ -86,8 +101,6 @@ export default function EquipePage() {
     return "Ausente";
   }
 
-  const agora = new Date();
-
   const horarioAtual =
     agora.getHours() * 60 +
     agora.getMinutes();
@@ -118,12 +131,25 @@ export default function EquipePage() {
             .split(":")
             .map(Number);
 
-        const horarioAgendamento =
+        const horarioInicio =
           hora * 60 + minuto;
+
+        // Ex: "30 Min", "60 Min", "180 Min"
+        const duracao =
+          parseInt(
+            String(
+              agendamento.duracao || "30 Min"
+            )
+          ) || 30;
+
+        const horarioFim =
+          horarioInicio + duracao;
 
         return (
           horarioAtual >=
-          horarioAgendamento
+            horarioInicio &&
+          horarioAtual <=
+            horarioFim
         );
       }
     );
@@ -136,12 +162,48 @@ export default function EquipePage() {
     function obterAtendimentoAtual(
       membro: Membro
     ) {
+      const horarioAtual =
+        agora.getHours() * 60 +
+        agora.getMinutes();
+
       return agendamentosHoje.find(
-        (agendamento: any) =>
-          agendamento.membroId ===
-            membro.id &&
-          agendamento.status !==
-            "cancelado"
+        (agendamento: any) => {
+          if (
+            agendamento.membroId !==
+              membro.id ||
+            agendamento.status ===
+              "cancelado" ||
+            !agendamento.horario
+          ) {
+            return false;
+          }
+
+          const [hora, minuto] =
+            agendamento.horario
+              .split(":")
+              .map(Number);
+
+          const horarioInicio =
+            hora * 60 + minuto;
+
+          const duracao =
+            parseInt(
+              String(
+                agendamento.duracao ||
+                  "30 Min"
+              )
+            ) || 30;
+
+          const horarioFim =
+            horarioInicio + duracao;
+
+          return (
+            horarioAtual >=
+              horarioInicio &&
+            horarioAtual <=
+              horarioFim
+          );
+        }
       );
     }
 
