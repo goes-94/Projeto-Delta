@@ -17,6 +17,8 @@ interface Membro {
 
 export default function EquipePage() {
   const [membros, setMembros] = useState<Membro[]>([]);
+  const [agendamentosHoje, setAgendamentosHoje] =
+  useState<any[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
 
   const [novoMembro, setNovoMembro] = useState<Omit<Membro, "id">>({
@@ -43,6 +45,105 @@ export default function EquipePage() {
     });
     return () => unsubscribe();
   }, []);
+
+    useEffect(() => {
+  const unsubscribe = onSnapshot(
+    collection(db, "agendamentos"),
+    (snapshot) => {
+      const hoje =
+        new Date().toLocaleDateString("pt-BR");
+
+      const lista = snapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter((agendamento: any) => {
+          if (!agendamento.data) {
+            return false;
+          }
+
+          return (
+            agendamento.data
+              .toDate()
+              .toLocaleDateString("pt-BR") ===
+            hoje
+          );
+        });
+
+      setAgendamentosHoje(lista);
+    }
+  );
+
+  return () => unsubscribe();
+}, []);
+
+    function obterStatusMembro(
+  membro: Membro
+) {
+  // Ausente continua manual
+  if (membro.status === "Ausente") {
+    return "Ausente";
+  }
+
+  const agora = new Date();
+
+  const horarioAtual =
+    agora.getHours() * 60 +
+    agora.getMinutes();
+
+  const atendimentoAtivo =
+    agendamentosHoje.find(
+      (agendamento: any) => {
+        if (
+          agendamento.membroId !==
+          membro.id
+        ) {
+          return false;
+        }
+
+        if (
+          agendamento.status ===
+          "cancelado"
+        ) {
+          return false;
+        }
+
+        if (!agendamento.horario) {
+          return false;
+        }
+
+        const [hora, minuto] =
+          agendamento.horario
+            .split(":")
+            .map(Number);
+
+        const horarioAgendamento =
+          hora * 60 + minuto;
+
+        return (
+          horarioAtual >=
+          horarioAgendamento
+        );
+      }
+    );
+
+  return atendimentoAtivo
+    ? "Em atendimento"
+    : "Disponível";
+}
+
+    function obterAtendimentoAtual(
+      membro: Membro
+    ) {
+      return agendamentosHoje.find(
+        (agendamento: any) =>
+          agendamento.membroId ===
+            membro.id &&
+          agendamento.status !==
+            "cancelado"
+      );
+    }
 
   async function salvarMembro(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -118,16 +219,50 @@ export default function EquipePage() {
               <p className="text-sm text-slate-400">{membro.cargo}</p>
             </div>
 
+            {obterAtendimentoAtual(membro) && (
+                <div className="mt-3 text-sm">
+                  <p className="text-gold-500 font-semibold">
+                    Cliente Atual
+                  </p>
+
+                  <p className="text-white">
+                    {
+                      obterAtendimentoAtual(
+                        membro
+                      )?.cliente
+                    }
+                  </p>
+
+                  <p className="text-slate-400">
+                    {
+                      obterAtendimentoAtual(
+                        membro
+                      )?.servico
+                    }
+                  </p>
+
+                  <p className="text-slate-500 text-xs">
+                    {
+                      obterAtendimentoAtual(
+                        membro
+                      )?.horario
+                    }
+                  </p>
+                </div>
+              )}
+
             <div className="mt-6 flex gap-2">
               <span
-                className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
-                  membro.status === "Disponível"
-                    ? "bg-green-900/30 text-green-400"
-                    : "bg-orange-900/30 text-orange-400"
-                }`}
-              >
-                {membro.status}
-              </span>
+                  className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                    obterStatusMembro(membro) === "Disponível"
+                      ? "bg-green-900/30 text-green-400"
+                      : obterStatusMembro(membro) === "Em atendimento"
+                      ? "bg-orange-900/30 text-orange-400"
+                      : "bg-red-900/30 text-red-400"
+                  }`}
+                >
+                  {obterStatusMembro(membro)}
+                </span>
             </div>
 
             <div className="mt-6 pt-6 border-t border-navy-800 flex justify-between text-slate-500">

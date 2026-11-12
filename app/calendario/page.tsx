@@ -21,6 +21,7 @@ export default function CalendarioPage() {
   const [form, setForm] = useState({
     cliente: "",
     servico: "",
+    duracao: "",
     membro: "",
     membroId:"",
     data: "",
@@ -55,6 +56,32 @@ export default function CalendarioPage() {
     carregarMembros();
   }, []);
 
+  useEffect(() => {
+    async function carregarServicos() {
+      try {
+        const snapshot = await getDocs(
+          collection(db, "servicos")
+        );
+
+        const lista = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          nome: doc.data().nome || "",
+          preco: doc.data().preco || 0,
+          duracao: doc.data().duracao || "",
+        }));
+
+        setServicos(lista);
+      } catch (error) {
+        console.error(
+          "Erro ao carregar serviços:",
+          error
+        );
+      }
+    }
+
+    carregarServicos();
+  }, []);
+
   async function salvarAgendamento(
     e: React.FormEvent
   ) {
@@ -79,9 +106,13 @@ export default function CalendarioPage() {
         )
       );
 
+      console.log("Membro:", form.membro);
+      console.log("Membro ID:", form.membroId);
+
       await addDoc(collection(db, "agendamentos"), {
         cliente: form.cliente,
         servico: form.servico,
+        duracao: form.duracao,
         membro: form.membro,
         membroId: form.membroId,
         data: dataTimestamp,
@@ -102,6 +133,14 @@ export default function CalendarioPage() {
       setLoading(false);
     }
   }
+  const [servicos, setServicos] = useState<
+    {
+      id: string;
+      nome: string;
+      preco: number;
+      duracao: string;
+    }[]
+  >([]);
 
   function handleChange(
     e: React.ChangeEvent<
@@ -134,15 +173,39 @@ export default function CalendarioPage() {
           className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
         />
 
-        <input
-          name="servico"
-          type="text"
-          placeholder="Serviço"
+        <select
           value={form.servico}
-          onChange={handleChange}
+          onChange={(e) => {
+            const servicoSelecionado =
+              servicos.find(
+                (s) => s.nome === e.target.value
+              );
+
+            if (!servicoSelecionado) return;
+
+            setForm({
+              ...form,
+              servico: servicoSelecionado.nome,
+              valor: String(servicoSelecionado.preco),
+              duracao: servicoSelecionado.duracao,
+            });
+          }}
           required
-          className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
-        />
+          className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
+          >
+          <option value="" className="text-black">
+            Selecione um serviço
+          </option>
+
+          {servicos.map((servico) => (
+            <option
+              key={servico.id}
+              value={servico.nome}
+            >
+              {servico.nome}
+            </option>
+          ))}
+        </select>
 
         <select
         value={form.membroId}
@@ -163,7 +226,7 @@ export default function CalendarioPage() {
         required
         className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
         >
-        <option value="" className="text-slate-500">
+        <option value="" className="text-black">
             Selecione um membro
         </option>
 
