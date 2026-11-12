@@ -13,6 +13,7 @@ interface Membro {
   email: string;
   telefone: string;
   horarios: string[];
+  percentualComissao: number;
 }
 
 export default function EquipePage() {
@@ -28,6 +29,7 @@ export default function EquipePage() {
     email: "",
     telefone: "",
     horarios: [],
+    percentualComissao: 0,
   });
 
   
@@ -45,6 +47,9 @@ export default function EquipePage() {
       clearInterval(intervalo);
   }, []);
 
+  const [menuAberto, setMenuAberto] =
+  useState<string | null>(null);
+
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "membros"), (snapshot) => {
       const lista: Membro[] = snapshot.docs.map((doc) => ({
@@ -55,6 +60,7 @@ export default function EquipePage() {
         email: doc.data().email || "",
         telefone: doc.data().telefone || "",
         horarios: doc.data().horarios || [],
+        percentualComissao: doc.data().percentualComissao || 0,
       }));
       setMembros(lista);
     });
@@ -219,6 +225,7 @@ export default function EquipePage() {
         email: "",
         telefone: "",
         horarios: [],
+        percentualComissao:0,
       });
     } catch (error) {
       console.error("Erro ao salvar membro:", error);
@@ -261,7 +268,8 @@ export default function EquipePage() {
         {membros.map((membro) => (
           <div
             key={membro.id}
-            className="bg-navy-900 border border-navy-800 p-6 rounded-xl hover:border-gold-500/50 transition-all group"
+            className="relative bg-navy-900 border border-navy-800 p-6 rounded-xl hover:border-gold-500/50 transition-all group"
+
           >
             <div className="flex justify-between items-start">
               <div className="w-12 h-12 bg-navy-800 rounded-full flex items-center justify-center text-gold-500 font-bold border border-navy-700">
@@ -271,9 +279,40 @@ export default function EquipePage() {
                   .join("")
                   .toUpperCase()}
               </div>
-              <button className="text-slate-500 hover:text-white">
-                <MoreVertical size={20} />
-              </button>
+                <button
+                  className="text-slate-500 hover:text-white"
+                  onClick={() =>
+                    setMenuAberto(
+                      menuAberto === membro.id
+                        ? null
+                        : membro.id
+                    )
+                  }
+                  >
+                  <MoreVertical size={20} />
+                </button>
+
+                {menuAberto === membro.id && (
+                  <div className="absolute right-4 top-14 bg-navy-800 border border-navy-700 rounded-lg shadow-lg z-50 min-w-[180px]">
+                    <button
+                      className="w-full px-4 py-2 text-left text-sm text-white hover:bg-navy-700"
+                    >
+                      Editar Comissão
+                    </button>
+
+                    <button
+                      className="w-full px-4 py-2 text-left text-sm text-white hover:bg-navy-700"
+                    >
+                      Ver Desempenho
+                    </button>
+
+                    <button
+                      className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-navy-700"
+                    >
+                      Excluir Membro
+                    </button>
+                  </div>
+                )}
             </div>
 
             <div className="mt-4">
@@ -414,6 +453,19 @@ export default function EquipePage() {
                 <option>Em atendimento</option>
                 <option>Ausente</option>
               </select>
+
+              <input
+                  type="number"
+                  placeholder="% Comissão"
+                  value={novoMembro.percentualComissao}
+                  onChange={(e) =>
+                    setNovoMembro({
+                      ...novoMembro,
+                      percentualComissao: Number(e.target.value),
+                    })
+                  }
+                  className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white"
+                />
 
               <button
                 type="submit"
