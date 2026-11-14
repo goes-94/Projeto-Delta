@@ -261,7 +261,7 @@ export default function EquipePage() {
               </button>
 
               {menuAberto === membro.id && (
-                <div className="absolute right-4 top-14 bg-navy-800 border border-navy-700 rounded-lg shadow-lg z-50 min-w-[180px]">
+                <div className="absolute right-4 top-14 bg-navy-800 border border-navy-700 rounded-lg shadow-lg z-50 -w-[180px]">
                   <button
                     onClick={() => {
                       setMembroSelecionado(membro);
