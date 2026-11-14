@@ -104,7 +104,7 @@ export default function AgendaSemanalPage() {
                       });
 
                       return (
-                        <td key={diaIndex} className="p-2 border-r border-navy-800 last:border-r-0 align-top min-h-[80px] h-20 w-44">
+                        <td key={diaIndex} className="p-2 border-r border-navy-800 last:border-r-0 align-top  h-20 w-44">
                           <div className="space-y-1.5 h-full">
                             {agendamentosNoBloco.map((ag) => (
                               <div
