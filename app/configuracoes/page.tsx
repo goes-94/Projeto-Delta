@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Settings, Store, Clock, Bell, Shield, Save } from "lucide-react";
+import { Settings, Store, Clock, Bell,  Save } from "lucide-react";
 
 export default function ConfiguracoesPage() {
   // Estado para armazenar as configurações da empresa
