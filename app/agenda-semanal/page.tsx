@@ -3,18 +3,18 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
-import { Calendar as CalendarIcon, Clock, User, Scissors } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, User, Scissors, CalendarDays } from "lucide-react";
 
 interface Agendamento {
   id: string;
   cliente: string;
   servico: string;
   horario: string; // Ex: "11:00"
-  data: any;       // Timestamp do Firestore
+  data: any;       // Timestamp do Firestore ou string "YYYY-MM-DD"
   status: string;  // "pendente", "concluido", etc.
 }
 
-const DIAS_SEMANA = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const HORARIOS = [
   "08:00", "09:00", "10:00", "11:00", "12:00", 
   "13:00", "14:00", "15:00", "16:00", "17:00", 
@@ -40,16 +40,34 @@ export default function AgendaSemanalPage() {
     return () => unsubscribe();
   }, []);
 
-  // Função auxiliar para mapear o Timestamp do Firestore para o dia da semana correspondente
-  // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+  // Função auxiliar corrigida para extrair o índice do dia da semana (0=Dom, 1=Seg, etc.) sem erro de fuso
   function obterDiaSemanaIndex(timestampData: any): number {
-    if (!timestampData) return -1;
+    if (!timestampData) return 0;
+    
+    // Se for string "YYYY-MM-DD"
+    if (typeof timestampData === "string" && /^\d{4}-\d{2}-\d{2}$/.test(timestampData)) {
+      const [ano, mes, dia] = timestampData.split("-").map(Number);
+      const dataLocal = new Date(ano, mes - 1, dia);
+      return dataLocal.getDay();
+    }
+
+    // Se for Timestamp do Firestore ou objeto Date
     const dataObj = timestampData.toDate ? timestampData.toDate() : new Date(timestampData);
-    const diaJS = dataObj.getDay(); // 0(Dom) a 6(Sáb)
-    // Se quiser ignorar domingo ou ajustar para a nossa lista (Segunda a Sábado):
-    // Vamos converter: Segunda(1)->0, Terça(2)->1, ..., Sábado(6)->5
-    if (diaJS === 0) return -1; // Domingo fora da grade principal, se desejar
-    return diaJS - 1; 
+    return isNaN(dataObj.getTime()) ? 0 : dataObj.getDay(); 
+  }
+
+  // Função para formatar a data curta para exibir no card (ex: "17/11")
+  function formatarDataCard(timestampData: any): string {
+    if (!timestampData) return "";
+
+    if (typeof timestampData === "string" && /^\d{4}-\d{2}-\d{2}$/.test(timestampData)) {
+      const [ano, mes, dia] = timestampData.split("-").map(Number);
+      const dataLocal = new Date(ano, mes - 1, dia);
+      return dataLocal.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    }
+
+    const dataObj = timestampData.toDate ? timestampData.toDate() : new Date(timestampData);
+    return isNaN(dataObj.getTime()) ? "" : dataObj.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   }
 
   return (
@@ -96,15 +114,15 @@ export default function AgendaSemanalPage() {
 
                     {/* Células dos Dias da Semana */}
                     {DIAS_SEMANA.map((_, diaIndex) => {
-                      // Filtra os agendamentos que batem com este dia da semana e este horário (ex: "11:00")
                       const agendamentosNoBloco = agendamentos.filter((item) => {
                         if (item.status === "cancelado") return false;
                         const diaDoItem = obterDiaSemanaIndex(item.data);
-                        const horaDoItem = item.horario ? String(item.horario).substring(0, 5) : "";                        return diaDoItem === diaIndex && horaDoItem === hora;
+                        const horaDoItem = item.horario ? String(item.horario).substring(0, 5) : "";                        
+                        return diaDoItem === diaIndex && horaDoItem === hora;
                       });
 
                       return (
-                        <td key={diaIndex} className="p-2 border-r border-navy-800 last:border-r-0 align-top  h-20 w-44">
+                        <td key={diaIndex} className="p-2 border-r border-navy-800 last:border-r-0 align-top h-24 w-44">
                           <div className="space-y-1.5 h-full">
                             {agendamentosNoBloco.map((ag) => (
                               <div
@@ -120,6 +138,10 @@ export default function AgendaSemanalPage() {
                                 </div>
                                 <div className="text-slate-300 flex items-center gap-1 truncate mt-0.5">
                                   <Scissors size={10} /> {ag.servico || "Serviço"}
+                                </div>
+                                {/* Exibição da data exata no card */}
+                                <div className="text-slate-400 flex items-center gap-1 truncate mt-1 pt-1 border-t border-navy-700/50 text-[10px]">
+                                  <CalendarDays size={10} className="text-gold-500" /> {formatarDataCard(ag.data)}
                                 </div>
                               </div>
                             ))}
