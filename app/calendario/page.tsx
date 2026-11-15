@@ -199,6 +199,7 @@ export default function CalendarioPage() {
 
           {servicos.map((servico) => (
             <option
+            className="text-black"
               key={servico.id}
               value={servico.nome}
             >
@@ -232,6 +233,7 @@ export default function CalendarioPage() {
 
         {membros.map((membro) => (
             <option
+            className="text-black"
             key={membro.id}
             value={membro.id}
             >

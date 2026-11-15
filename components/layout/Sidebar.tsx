@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/app/context/AuthContext";
+import { LogOut } from "lucide-react";
 import { 
   LayoutDashboard, 
   Calendar, 
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 
 export default function Sidebar() {
+  const { logout } = useAuth();
   const pathname = usePathname();
   const [recolhido, setRecolhido] = useState(false);
 
@@ -58,27 +61,43 @@ export default function Sidebar() {
       </div>
 
       {/* Links de navegação */}
-      <nav className="space-y-2 flex-1">
-        {menuItems.map((item) => {
-          const isActive = pathname === item.path;
-          return (
-            <Link
-              key={item.name}
-              href={item.path}
-              title={recolhido ? item.name : undefined}
-              className={`flex items-center p-3 rounded-lg transition-colors ${
-                recolhido ? "justify-center" : "gap-3"
-              } ${
-                isActive
-                  ? "bg-gold-500 text-navy-900 font-bold"
-                  : "text-slate-400 hover:bg-navy-800 hover:text-white"
-              }`}
-            >
-              <item.icon size={20} className="shrink-0" />
-              {!recolhido && <span className="truncate">{item.name}</span>}
-            </Link>
-          );
-        })}
+      <nav className="space-y-2 flex-1 flex flex-col justify-between">
+        <div className="space-y-2">
+          {menuItems.map((item) => {
+            const isActive = pathname === item.path;
+            return (
+              <Link
+                key={item.name}
+                href={item.path}
+                title={recolhido ? item.name : undefined}
+                className={`flex items-center p-3 rounded-lg transition-colors ${
+                  recolhido ? "justify-center" : "gap-3"
+                } ${
+                  isActive
+                    ? "bg-gold-500 text-navy-900 font-bold"
+                    : "text-slate-400 hover:bg-navy-800 hover:text-white"
+                }`}
+              >
+                <item.icon size={20} className="shrink-0" />
+                {!recolhido && <span className="truncate">{item.name}</span>}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Botão de Sair adaptável ao estado recolhido */}
+        <div className="pt-4 border-t border-navy-800">
+          <button
+            onClick={logout}
+            title={recolhido ? "Sair do Sistema" : undefined}
+            className={`flex items-center w-full p-3 rounded-lg text-slate-400 hover:text-red-400 hover:bg-navy-800/60 transition-all font-medium text-sm ${
+              recolhido ? "justify-center" : "gap-3 px-3 py-2.5"
+            }`}
+          >
+            <LogOut size={20} className="shrink-0" />
+            {!recolhido && <span className="truncate">Sair do Sistema</span>}
+          </button>
+        </div>
       </nav>
     </aside>
   );
