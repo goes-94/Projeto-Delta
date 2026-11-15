@@ -50,11 +50,22 @@ function formatarValor(valor: number) {
 
 function formatarData(data: Timestamp | string) {
   if (!data) return "";
+
   if (typeof data === "string") {
+    // Se vier no formato puro "YYYY-MM-DD" (ex: "2026-11-17")
+    if (/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+      const [ano, mes, dia] = data.split("-").map(Number);
+      const d = new Date(ano, mes - 1, dia);
+      return d.toLocaleDateString("pt-BR");
+    }
+
+    // Caso venha com hora/ISO (ex: "2026-11-17T14:30:00")
     const d = new Date(data);
-    return isNaN(d.getTime()) ? "" : d.toLocaleDateString('pt-BR');
+    return isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR");
   }
-  return data.toDate().toLocaleDateString('pt-BR');
+
+  // Caso seja um Timestamp do Firestore
+  return data.toDate().toLocaleDateString("pt-BR");
 }
 
 export default function AgendamentosPage() {
