@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/app/context/AuthContext";
+import { useAuth } from "@/app/(admin)/context/AuthContext";
 import { LogOut } from "lucide-react";
 import { 
   LayoutDashboard, 

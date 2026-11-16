@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, addDoc } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+import { db } from "../../../firebaseConfig";
 import { Plus, Search, MoreHorizontal, Clock, DollarSign, X } from "lucide-react";
 
 interface Servico {

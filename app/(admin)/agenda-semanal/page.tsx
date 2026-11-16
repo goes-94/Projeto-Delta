@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+import { db } from "../../../firebaseConfig";
 import { Calendar as CalendarIcon, Clock, User, Scissors, CalendarDays } from "lucide-react";
 
 interface Agendamento {

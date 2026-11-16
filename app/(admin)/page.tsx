@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { collection, query, where, Timestamp, onSnapshot, getDocs } from "firebase/firestore";
-import { db } from "../firebaseConfig";
-import "./globals.css";
+import { db } from "../../firebaseConfig";
+import "../globals.css";
 
 
 

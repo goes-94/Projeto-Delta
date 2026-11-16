@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, query, getDocs, where } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+import { db } from "../../../firebaseConfig";
 import { UserPlus, MoreVertical, Mail, Phone, Clock } from "lucide-react";
 
 interface Membro {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Plus, Search, Filter } from "lucide-react";
 import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+import { db } from "../../../firebaseConfig";
 import { doc, updateDoc } from "firebase/firestore";
 
 async function alterarStatus(

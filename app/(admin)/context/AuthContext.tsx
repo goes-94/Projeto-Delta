@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
-import { auth } from "../../firebaseConfig";
+import { auth } from "../../../firebaseConfig";
 import { useRouter, usePathname } from "next/navigation";
 
 interface AuthContextType {
@@ -24,8 +24,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(currentUser);
       setLoading(false);
 
-      // Se o usuário NÃO estiver logado e tentar acessar qualquer página que não seja /login
-      if (!currentUser && pathname !== "/login") {
+      // 🛡️ Se estivermos no Portal ou na página de login, NUNCA redireciona
+      const isPublicRoute = pathname === "/login" || pathname?.startsWith("/portal");
+
+      if (isPublicRoute) return;
+
+      // Se o usuário NÃO estiver logado e tentar acessar uma rota protegida (admin)
+      if (!currentUser) {
         router.push("/login");
       }
       

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../firebaseConfig"; // Ajuste o caminho se necessário para o seu arquivo firebaseConfig
+import { auth } from "../../../firebaseConfig"; // Ajuste o caminho se necessário para o seu arquivo firebaseConfig
 import { useRouter } from "next/navigation";
 import { Lock, Mail } from "lucide-react";
 

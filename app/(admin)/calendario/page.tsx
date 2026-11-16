@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "../../firebaseConfig";
+import { db } from "../../../firebaseConfig";
 import {
   collection,
   addDoc,
@@ -20,6 +20,7 @@ export default function CalendarioPage() {
 
   const [form, setForm] = useState({
     cliente: "",
+    whatsapp: "",
     servico: "",
     duracao: "",
     membro: "",
@@ -111,6 +112,7 @@ export default function CalendarioPage() {
 
       await addDoc(collection(db, "agendamentos"), {
         cliente: form.cliente,
+        whatsapp: form.whatsapp,
         servico: form.servico,
         duracao: form.duracao,
         membro: form.membro,
@@ -168,6 +170,16 @@ export default function CalendarioPage() {
           type="text"
           placeholder="Nome do cliente"
           value={form.cliente}
+          onChange={handleChange}
+          required
+          className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
+        />
+
+          <input
+          name="whatsapp"
+          type="text"
+          placeholder="WhatsApp (ex: (11) 99999-9999)"
+          value={form.whatsapp}
           onChange={handleChange}
           required
           className="w-full p-2 rounded bg-navy-800 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
