@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "../../../firebaseConfig";
-import { collection, getDocs, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { collection, getDocs, addDoc, serverTimestamp, Timestamp, query, where } from "firebase/firestore";
 import { Calendar, Clock, User, Scissors, CheckCircle2, Phone } from "lucide-react";
 
 export default function PortalAgendamentoPage() {
@@ -11,6 +11,7 @@ export default function PortalAgendamentoPage() {
   // Listas vindas do Firebase
   const [servicos, setServicos] = useState<any[]>([]);
   const [membros, setMembros] = useState<any[]>([]);
+  const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
   
   // Dados do formulário do cliente
   const [cliente, setCliente] = useState("");
@@ -22,7 +23,7 @@ export default function PortalAgendamentoPage() {
   
   const [loading, setLoading] = useState(false);
 
-  // Horários disponíveis na barbearia
+  // Horários padrão da barbearia
   const HORARIOS_DISPONIVEIS = [
     "08:00", "09:00", "10:00", "11:00", "13:00", 
     "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"
@@ -44,14 +45,68 @@ export default function PortalAgendamentoPage() {
     carregarDados();
   }, []);
 
-  // Função para finalizar o agendamento enviado pelo cliente
+  // Buscar horários ocupados filtrando por membroId (Sem precisar de índice composto)
+  useEffect(() => {
+    async function verificarHorariosOcupados() {
+      if (!membroSelecionado || !dataEscolhida) {
+        setHorariosOcupados([]);
+        return;
+      }
+
+      try {
+        // Busca apenas os agendamentos deste profissional
+        const q = query(
+          collection(db, "agendamentos"),
+          where("membroId", "==", membroSelecionado.id)
+        );
+
+        const snapshot = await getDocs(q);
+        const ocupados: string[] = [];
+
+        snapshot.forEach((docItem) => {
+          const dados = docItem.data();
+          if (dados.status !== "cancelado" && dados.data && dados.horario) {
+            // Converte o Timestamp do Firestore para string YYYY-MM-DD no horário local
+            const dataObj = dados.data.toDate ? dados.data.toDate() : new Date(dados.data);
+            const ano = dataObj.getFullYear();
+            const mes = String(dataObj.getMonth() + 1).padStart(2, "0");
+            const dia = String(dataObj.getDate()).padStart(2, "0");
+            const dataFormatada = `${ano}-${mes}-${dia}`;
+
+            // Se for exatamente a mesma data escolhida, marca o horário como ocupado
+            if (dataFormatada === dataEscolhida) {
+              ocupados.push(dados.horario);
+            }
+          }
+        });
+
+        setHorariosOcupados(ocupados);
+      } catch (error) {
+        console.error("Erro ao buscar horários ocupados:", error);
+      }
+    }
+
+    verificarHorariosOcupados();
+  }, [membroSelecionado, dataEscolhida]);
+
+  // Função para finalizar o agendamento
   async function confirmarAgendamento(e: React.FormEvent) {
     e.preventDefault();
+    if (!horarioEscolhido || !dataEscolhida || !membroSelecionado) return;
+    
     setLoading(true);
 
     try {
       const [ano, mes, dia] = dataEscolhida.split("-").map(Number);
       const dataTimestamp = Timestamp.fromDate(new Date(ano, mes - 1, dia, 12, 0, 0));
+
+      // Dupla checagem rápida no cliente antes de salvar
+      if (horariosOcupados.includes(horarioEscolhido)) {
+        alert("Este horário acabou de ser reservado! Por favor, escolha outro.");
+        setLoading(false);
+        setHorarioEscolhido("");
+        return;
+      }
 
       await addDoc(collection(db, "agendamentos"), {
         cliente,
@@ -153,7 +208,7 @@ export default function PortalAgendamentoPage() {
                 className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white outline-none"
                 defaultValue=""
               >
-                <option  value="" disabled>Selecione um profissional...</option>
+                <option value="" disabled>Selecione um profissional...</option>
                 {membros.map(m => (
                   <option className="text-black" key={m.id} value={m.id}>{m.nome}</option>
                 ))}
@@ -191,29 +246,46 @@ export default function PortalAgendamentoPage() {
                 type="date"
                 required
                 value={dataEscolhida}
-                onChange={(e) => setDataEscolhida(e.target.value)}
+                onChange={(e) => {
+                  setDataEscolhida(e.target.value);
+                  setHorarioEscolhido("");
+                }}
                 className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white outline-none"
               />
             </div>
 
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Horários Disponíveis</label>
-              <div className="grid grid-cols-3 gap-2">
-                {HORARIOS_DISPONIVEIS.map((hora) => (
-                  <button
-                    type="button"
-                    key={hora}
-                    onClick={() => setHorarioEscolhido(hora)}
-                    className={`p-2 rounded-lg text-sm border font-mono transition ${
-                      horarioEscolhido === hora 
-                        ? "bg-gold-500 text-navy-900 border-gold-500 font-bold" 
-                        : "bg-navy-800 border-navy-700 text-slate-300 hover:border-gold-500/50"
-                    }`}
-                  >
-                    {hora}
-                  </button>
-                ))}
-              </div>
+              <label className="text-xs text-slate-400 mb-1 block">
+                Horários Disponíveis {membroSelecionado && <span className="text-gold-400">para {membroSelecionado.nome}</span>}
+              </label>
+              
+              {!dataEscolhida ? (
+                <p className="text-xs text-slate-500 italic py-2">Selecione uma data primeiro para ver os horários livres.</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {HORARIOS_DISPONIVEIS.map((hora) => {
+                    const ocupado = horariosOcupados.includes(hora);
+
+                    return (
+                      <button
+                        type="button"
+                        key={hora}
+                        disabled={ocupado}
+                        onClick={() => setHorarioEscolhido(hora)}
+                        className={`p-2 rounded-lg text-sm border font-mono transition ${
+                          ocupado 
+                            ? "bg-red-950/40 border-red-900/50 text-red-400/50 line-through cursor-not-allowed" 
+                            : horarioEscolhido === hora 
+                              ? "bg-gold-500 text-navy-900 border-gold-500 font-bold" 
+                              : "bg-navy-800 border-navy-700 text-slate-300 hover:border-gold-500/50"
+                        }`}
+                      >
+                        {hora} {ocupado && "(Ocupado)"}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -252,10 +324,11 @@ export default function PortalAgendamentoPage() {
                 setMembroSelecionado(null);
                 setDataEscolhida("");
                 setHorarioEscolhido("");
+                setHorariosOcupados([]);
               }}
               className="w-full py-3 bg-gold-500 hover:bg-gold-600 text-navy-900 font-bold rounded-lg transition"
             >
-                Fazer Novo Agendamento
+              Fazer Novo Agendamento
             </button>
           </div>
         )}
