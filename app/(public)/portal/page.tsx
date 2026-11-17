@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { db } from "../../../firebaseConfig";
-import { collection, getDocs, addDoc, serverTimestamp, Timestamp, query, where } from "firebase/firestore";
-import { Calendar, Clock, User, Scissors, CheckCircle2, Phone } from "lucide-react";
+import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, query, where } from "firebase/firestore";
+import { Calendar, Clock, User, Scissors, CheckCircle2, Phone, Mail } from "lucide-react";
 
 export default function PortalAgendamentoPage() {
   const [etapa, setEtapa] = useState(1); // 1: Dados, 2: Serviço/Profissional, 3: Data/Hora, 4: Sucesso
@@ -16,6 +16,7 @@ export default function PortalAgendamentoPage() {
   // Dados do formulário do cliente
   const [cliente, setCliente] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [email, setEmail] = useState(""); // 📧 Novo estado para o e-mail
   const [servicoSelecionado, setServicoSelecionado] = useState<any>(null);
   const [membroSelecionado, setMembroSelecionado] = useState<any>(null);
   const [dataEscolhida, setDataEscolhida] = useState("");
@@ -45,7 +46,7 @@ export default function PortalAgendamentoPage() {
     carregarDados();
   }, []);
 
-  // Buscar horários ocupados filtrando por membroId (Sem precisar de índice composto)
+  // Buscar horários ocupados filtrando por membroId
   useEffect(() => {
     async function verificarHorariosOcupados() {
       if (!membroSelecionado || !dataEscolhida) {
@@ -54,7 +55,6 @@ export default function PortalAgendamentoPage() {
       }
 
       try {
-        // Busca apenas os agendamentos deste profissional
         const q = query(
           collection(db, "agendamentos"),
           where("membroId", "==", membroSelecionado.id)
@@ -66,14 +66,12 @@ export default function PortalAgendamentoPage() {
         snapshot.forEach((docItem) => {
           const dados = docItem.data();
           if (dados.status !== "cancelado" && dados.data && dados.horario) {
-            // Converte o Timestamp do Firestore para string YYYY-MM-DD no horário local
             const dataObj = dados.data.toDate ? dados.data.toDate() : new Date(dados.data);
             const ano = dataObj.getFullYear();
             const mes = String(dataObj.getMonth() + 1).padStart(2, "0");
             const dia = String(dataObj.getDate()).padStart(2, "0");
             const dataFormatada = `${ano}-${mes}-${dia}`;
 
-            // Se for exatamente a mesma data escolhida, marca o horário como ocupado
             if (dataFormatada === dataEscolhida) {
               ocupados.push(dados.horario);
             }
@@ -89,7 +87,7 @@ export default function PortalAgendamentoPage() {
     verificarHorariosOcupados();
   }, [membroSelecionado, dataEscolhida]);
 
-  // Função para finalizar o agendamento
+  // Função para finalizar o agendamento e sincronizar com a coleção "clientes"
   async function confirmarAgendamento(e: React.FormEvent) {
     e.preventDefault();
     if (!horarioEscolhido || !dataEscolhida || !membroSelecionado) return;
@@ -99,6 +97,7 @@ export default function PortalAgendamentoPage() {
     try {
       const [ano, mes, dia] = dataEscolhida.split("-").map(Number);
       const dataTimestamp = Timestamp.fromDate(new Date(ano, mes - 1, dia, 12, 0, 0));
+      const dataFormatadaStr = `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}/${ano}`;
 
       // Dupla checagem rápida no cliente antes de salvar
       if (horariosOcupados.includes(horarioEscolhido)) {
@@ -108,9 +107,11 @@ export default function PortalAgendamentoPage() {
         return;
       }
 
+      // 1. Salvar na coleção "agendamentos"
       await addDoc(collection(db, "agendamentos"), {
         cliente,
         whatsapp,
+        email,
         servico: servicoSelecionado.nome,
         duracao: servicoSelecionado.duracao || "30 min",
         membro: membroSelecionado.nome,
@@ -122,10 +123,43 @@ export default function PortalAgendamentoPage() {
         criadoEm: serverTimestamp(),
       });
 
+      // 2. Sincronizar / Salvar na coleção "clientes" (Evita duplicados por WhatsApp/E-mail)
+      const clientesRef = collection(db, "clientes");
+      const qCliente = query(clientesRef, where("whatsapp", "==", whatsapp));
+      const clienteSnapshot = await getDocs(qCliente);
+
+      const novoServicoHistorico = {
+        servico: servicoSelecionado.nome,
+        data: dataFormatadaStr,
+        valor: Number(servicoSelecionado.preco || 0),
+      };
+
+      if (!clienteSnapshot.empty) {
+        // Se o cliente já existe, atualiza os dados e insere no histórico
+        const clienteDoc = clienteSnapshot.docs[0];
+        const dadosExistentes = clienteDoc.data();
+        const historicoAtual = dadosExistentes.historicoServicos || [];
+
+        await updateDoc(doc(db, "clientes", clienteDoc.id), {
+          nome: cliente,
+          email: email || dadosExistentes.email,
+          historicoServicos: [...historicoAtual, novoServicoHistorico],
+        });
+      } else {
+        // Se for novo cliente, cria o documento na coleção "clientes"
+        await addDoc(clientesRef, {
+          nome: cliente,
+          whatsapp,
+          email,
+          historicoServicos: [novoServicoHistorico],
+          criadoEm: serverTimestamp(),
+        });
+      }
+
       setLoading(false);
       setEtapa(4); // Vai para a tela de sucesso
     } catch (error) {
-      console.error("Erro ao salvar agendamento:", error);
+      console.error("Erro ao salvar agendamento e cliente:", error);
       alert("Erro ao concluir agendamento. Tente novamente.");
       setLoading(false);
     }
@@ -155,7 +189,7 @@ export default function PortalAgendamentoPage() {
                 placeholder="Ex: João Silva"
                 value={cliente}
                 onChange={(e) => setCliente(e.target.value)}
-                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white focus:ring-2 focus:ring-gold-500 outline-none"
+                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white focus:ring-2 focus:ring-gold-500 outline-none text-sm"
               />
             </div>
             <div>
@@ -163,10 +197,21 @@ export default function PortalAgendamentoPage() {
               <input
                 type="text"
                 required
-                placeholder="Ex: (11) 99999-9999"
+                placeholder="Ex: 11999999999"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
-                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white focus:ring-2 focus:ring-gold-500 outline-none"
+                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white focus:ring-2 focus:ring-gold-500 outline-none text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400">E-mail</label>
+              <input
+                type="email"
+                required
+                placeholder="Ex: joao@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white focus:ring-2 focus:ring-gold-500 outline-none text-sm"
               />
             </div>
             <button
@@ -189,7 +234,7 @@ export default function PortalAgendamentoPage() {
               <label className="text-xs text-slate-400">Serviço Desejado</label>
               <select
                 onChange={(e) => setServicoSelecionado(servicos.find(s => s.id === e.target.value))}
-                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white outline-none"
+                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white outline-none text-sm"
                 defaultValue=""
               >
                 <option value="" disabled>Selecione um serviço...</option>
@@ -205,7 +250,7 @@ export default function PortalAgendamentoPage() {
               <label className="text-xs text-slate-400">Profissional (Barbeiro)</label>
               <select
                 onChange={(e) => setMembroSelecionado(membros.find(m => m.id === e.target.value))}
-                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white outline-none"
+                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white outline-none text-sm"
                 defaultValue=""
               >
                 <option value="" disabled>Selecione um profissional...</option>
@@ -218,14 +263,14 @@ export default function PortalAgendamentoPage() {
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => setEtapa(1)}
-                className="w-1/3 py-3 bg-navy-800 hover:bg-navy-700 text-slate-300 rounded-lg font-medium"
+                className="w-1/3 py-3 bg-navy-800 hover:bg-navy-700 text-slate-300 rounded-lg font-medium text-sm"
               >
                 Voltar
               </button>
               <button
                 disabled={!servicoSelecionado || !membroSelecionado}
                 onClick={() => setEtapa(3)}
-                className="w-2/3 py-3 bg-gold-500 hover:bg-gold-600 text-navy-900 font-bold rounded-lg transition disabled:opacity-50"
+                className="w-2/3 py-3 bg-gold-500 hover:bg-gold-600 text-navy-900 font-bold rounded-lg transition disabled:opacity-50 text-sm"
               >
                 Escolher Data
               </button>
@@ -250,7 +295,7 @@ export default function PortalAgendamentoPage() {
                   setDataEscolhida(e.target.value);
                   setHorarioEscolhido("");
                 }}
-                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white outline-none"
+                className="w-full mt-1 p-3 rounded-lg bg-navy-800 border border-navy-700 text-white outline-none text-sm"
               />
             </div>
 
@@ -292,14 +337,14 @@ export default function PortalAgendamentoPage() {
               <button
                 type="button"
                 onClick={() => setEtapa(2)}
-                className="w-1/3 py-3 bg-navy-800 hover:bg-navy-700 text-slate-300 rounded-lg font-medium"
+                className="w-1/3 py-3 bg-navy-800 hover:bg-navy-700 text-slate-300 rounded-lg font-medium text-sm"
               >
                 Voltar
               </button>
               <button
                 type="submit"
                 disabled={loading || !dataEscolhida || !horarioEscolhido}
-                className="w-2/3 py-3 bg-gold-500 hover:bg-gold-600 text-navy-900 font-bold rounded-lg transition disabled:opacity-50"
+                className="w-2/3 py-3 bg-gold-500 hover:bg-gold-600 text-navy-900 font-bold rounded-lg transition disabled:opacity-50 text-sm"
               >
                 {loading ? "Agendando..." : "Confirmar Agendamento"}
               </button>
@@ -313,13 +358,14 @@ export default function PortalAgendamentoPage() {
             <CheckCircle2 size={56} className="text-green-500 mx-auto" />
             <h2 className="text-xl font-bold text-white">Agendamento Realizado!</h2>
             <p className="text-slate-400 text-sm">
-              Tudo pronto, <span className="text-gold-400 font-semibold">{cliente}</span>! Seu horário foi registrado com sucesso e já está visível na agenda da barbearia.
+              Tudo pronto, <span className="text-gold-400 font-semibold">{cliente}</span>! Seu horário foi registrado com sucesso e o seu cadastro foi atualizado na nossa base.
             </p>
             <button
               onClick={() => {
                 setEtapa(1);
                 setCliente("");
                 setWhatsapp("");
+                setEmail("");
                 setServicoSelecionado(null);
                 setMembroSelecionado(null);
                 setDataEscolhida("");

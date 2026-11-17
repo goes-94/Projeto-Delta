@@ -4,12 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/(admin)/context/AuthContext";
-import { LogOut } from "lucide-react";
+import { LogOut, Users2 } from "lucide-react";
 import { 
   LayoutDashboard, 
   Calendar, 
   CalendarDays, 
-  Users, 
+  Users,
+  User2,
   Scissors, 
   BarChart3, 
   Settings,
@@ -29,6 +30,7 @@ export default function Sidebar() {
     { name: "Equipe", path: "/equipe", icon: Users },
     { name: "Serviços", path: "/servicos", icon: Scissors },
     { name: "Relatórios", path: "/relatorios", icon: BarChart3 },
+    { name: "Clientes", path: "/clientes", icon: User2 },
     { name: "Configurações", path: "/configuracoes", icon: Settings },
   ];
 
